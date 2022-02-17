@@ -1,13 +1,158 @@
-﻿// CrusherChess.cpp : This file contains the 'main' function. Program execution begins and ends there.
-//#define _CRT_SECURE_NO_WARNINGS
+﻿//includes
+#pragma region 
 
 #pragma once
-#include "CrusherChess.h"
-#include "ConsoleColours.cpp"
+
+#define NOMINMAX
+
 #include <stack>
-//#include "Search.cpp"
+#include <iostream>
+#include <cassert>
+#include <string>
+#include <fcntl.h>
+#include <io.h>
+#include <map>
+#include <chrono>
+#include <wtypes.h>
+#include <vector>
+#include <ostream>
+#include <Windows.h>
+#include <consoleapi2.h>
+
+class TextAttr
+{
+	friend std::ostream& operator<<(std::ostream& out, TextAttr attr)
+	{
+		SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), attr.value);
+		return out;
+	}
+public:
+	explicit TextAttr(WORD attributes) : value(attributes) {}
+private:
+	WORD value;
+};
+
+#define FOREGROUND_WHITE (FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE)
+#define BACKGROUND_WHITE (BACKGROUND_RED | BACKGROUND_GREEN | BACKGROUND_BLUE)
 
 
+
+
+typedef unsigned long long U64;
+//move list
+typedef struct Moves
+{
+	int moves[255];
+	//could possibily use this?
+	//std::size(data);
+
+   // int legal[255];
+
+	//move count
+	int count;
+
+} Moves;
+
+// FEN dedug positions
+#define empty_board "8/8/8/8/8/8/8/8 b - - "
+#define start_position "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 "
+#define tricky_position "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 "
+constexpr auto killer_position = "rnbqkb1r/pp1p1pPp/8/2p1pP2/1P1P4/3P3P/P1P1P3/RNBQKBNR w KQkq e6 0 1";
+#define cmk_position "r2q1rk1/ppp2ppp/2n1bn2/2b1p3/3pP3/3P1NPP/PPP1NPB1/R1BQ1RK1 b - - 0 9 "
+#define repetitions "2r3k1/R7/8/1R6/8/8/P4KPP/8 w - - 0 40 "
+
+#pragma warning(disable:6031)
+
+#pragma endregion
+
+/****************************************\
+ ========================================
+				Methods
+ ========================================
+\****************************************/
+#pragma region
+void print_bitboard(U64 bitboard);
+void print_magic_numbers();
+void calc_mask_files();
+U64 mask_pawn_attacks(bool side, int square);
+U64 mask_knight_attacks(int square);
+U64 mask_king_attacks(int square);
+U64 mask_bishop_attacks(int square);
+U64 mask_rook_attacks(int square);
+U64 bishop_blocker_attacks(int square, U64 block);
+U64 rook_blocker_attacks(int square, U64 block);
+void init_leapers_attacks();
+void init_all();
+
+static inline unsigned int randu32();
+static inline U64 randu64();
+
+U64 generate_magic_number();
+
+U64 set_occupancy(int index, int bits_in_mask, U64 attack_mask);
+U64 find_magic_number(int square, int relevant_bits, int bishop);
+void init_magic_numbers();
+void init_sliders_attacks(int bishop);
+
+static inline U64 get_bishop_attacks(int square, U64 occupancy);
+static inline U64 get_rook_attacks(int square, U64 occupancy);
+static inline bool is_square_attacked(int square, int side);
+
+
+//void search_position(int depth);
+#pragma endregion
+/****************************************\
+ ========================================
+				  Enums
+ ========================================
+\****************************************/
+#pragma region
+//piece cords
+enum Square : int
+{
+	a8, b8, c8, d8, e8, f8, g8, h8,
+	a7, b7, c7, d7, e7, f7, g7, h7,
+	a6, b6, c6, d6, e6, f6, g6, h6,
+	a5, b5, c5, d5, e5, f5, g5, h5,
+	a4, b4, c4, d4, e4, f4, g4, h4,
+	a3, b3, c3, d3, e3, f3, g3, h3,
+	a2, b2, c2, d2, e2, f2, g2, h2,
+	a1, b1, c1, d1, e1, f1, g1, h1,
+
+	SQUARE_NB, NO_SQ
+};
+
+//enum Square : int
+//{
+//    SQ_A1, SQ_B1, SQ_C1, SQ_D1, SQ_E1, SQ_F1, SQ_G1, SQ_H1,
+//    SQ_A2, SQ_B2, SQ_C2, SQ_D2, SQ_E2, SQ_F2, SQ_G2, SQ_H2,
+//    SQ_A3, SQ_B3, SQ_C3, SQ_D3, SQ_E3, SQ_F3, SQ_G3, SQ_H3,
+//    SQ_A4, SQ_B4, SQ_C4, SQ_D4, SQ_E4, SQ_F4, SQ_G4, SQ_H4,
+//    SQ_A5, SQ_B5, SQ_C5, SQ_D5, SQ_E5, SQ_F5, SQ_G5, SQ_H5,
+//    SQ_A6, SQ_B6, SQ_C6, SQ_D6, SQ_E6, SQ_F6, SQ_G6, SQ_H6,
+//    SQ_A7, SQ_B7, SQ_C7, SQ_D7, SQ_E7, SQ_F7, SQ_G7, SQ_H7,
+//    SQ_A8, SQ_B8, SQ_C8, SQ_D8, SQ_E8, SQ_F8, SQ_G8, SQ_H8,
+//    SQ_NONE,
+//
+//    SQUARE_ZERO = 0,
+//    SQUARE_NB = 64
+//};
+
+//clors
+enum Colors { WHITE, BLACK, BOTH };
+
+enum { ROOK, BISHOP };
+
+//castling rights represented in 4 bits
+enum Castling { WK = 1, WQ = 2, BK = 4, BQ = 8 };
+
+// encode pieces
+enum Pieces { P, N, B, R, Q, K, p, n, b, r, q, k };
+//globals
+enum { COLOR_NB = 2 };
+
+
+#pragma endregion
 /****************************************\
  ========================================
 			  Bit operations
@@ -345,7 +490,6 @@ const int castling_rights[64] =
 
 
 #pragma endregion
-
 /****************************************\
  ========================================
 				 Globals
@@ -610,13 +754,13 @@ void print_magic_numbers()
 void print_move(int move)
 {
 	if (get_move_promoted(move))	
-		printf("%s%s%c\n",
+		printf("%s%s%c",
 		square_to_coordinates[get_move_source(move)],
 		square_to_coordinates[get_move_target(move)],
 		promoted_pieces[get_move_promoted(move)]
 		);
 	else
-		printf("%s%s\n",
+		printf("%s%s",
 			square_to_coordinates[get_move_source(move)],
 			square_to_coordinates[get_move_target(move)]			
 		);
@@ -708,43 +852,20 @@ U64 mask_pawn_attacks(bool side, int square)
 
 	//white
 	if (side == WHITE)
-	{
-		//printf("Before:\n");
-		//print_bitboard(bitboard);
-
-		//printf("after:\n");
-		//print_Bitboard(bitboard >> 7);
-
-		//if(bitboard >> 7 & not a file
-
+	{		
 		auto shift7 = bitboard >> 7;
 		auto shift9 = bitboard >> 9;
-
-		//printf("orig :\n");
-		//print_bitboard(bitboard);
-
-		//printf("shift 7:\n");
-		//print_bitboard(shift7);
+	
 
 		if (shift7 & not_a_file) attacks |= shift7;
-		if (shift9 & not_h_file) attacks |= shift9;
-
-		//attacks |= (bitboard >> 7) | (bitboard >> 9);
+		if (shift9 & not_h_file) attacks |= shift9;	
 	}
 	//black
 	else
-	{
-		//printf("Before:\n");
-		//print_bitboard(bitboard);
-
+	{		
 		auto shift7 = bitboard << 7;
 		auto shift9 = bitboard << 9;
-
-		//printf("orig :\n");
-		//print_bitboard(bitboard);
-
-		//printf("shift 7:\n");
-		//print_bitboard(shift7);
+	
 
 		if (shift7 & not_h_file) attacks |= shift7;
 		if (shift9 & not_a_file) attacks |= shift9;
@@ -1109,7 +1230,7 @@ void init_sliders_attacks(int bishop)
 				U64 occupancy = set_occupancy(i, relevant_bits_count, attack_mask);
 				//init magic index
 				int magic_index = (occupancy * rook_magic_numbers[square]) >> (64 - rook_relevant_bits[square]);
-				//init rook attacks
+				//init rook attacks				
 				rook_attacks[square][magic_index] = rook_blocker_attacks(square, occupancy);
 			}
 		}
@@ -1133,6 +1254,8 @@ static inline U64 get_rook_attacks(int square, U64 occupancy)
 	occupancy &= rook_masks[square];
 	occupancy *= rook_magic_numbers[square];
 	occupancy >>= 64 - rook_relevant_bits[square];
+
+	//print_bitboard(occupancy);
 
 	return rook_attacks[square][occupancy];
 }
@@ -1975,7 +2098,6 @@ static inline int make_move(int move, int move_flag)
 
 
 #pragma endregion
-
 /****************************************\
  ========================================
 				 Perft
@@ -2055,7 +2177,7 @@ void perft_test(int depth)
 			// take back
 			take_back();			
 			
-			printf("%s%s%c  nodes:%llu\n",
+			printf("%s%s%c  nodes: %llu\n",
 				square_to_coordinates[get_move_source(move)],
 				square_to_coordinates[get_move_target(move)],
 				promoted_pieces[get_move_promoted(move)],
@@ -2081,14 +2203,15 @@ void perft_test(int depth)
 #pragma endregion
 /****************************************\
  ========================================
-				 search
+				My Search
  ========================================
 \****************************************/
+#pragma region
 
 const int piece_scores[12] = { 10, 30, 31, 50, 90, 2000, -10, -30, -31, -50, -90, -2000 };
 
 
-static inline int position_evaluate(int cnt,int depth)
+static inline int Mposition_evaluate(int cnt,int depth)
 {
 
 	/*if (bitboards[K] == 0 || bitboards[k] == 0)
@@ -2149,8 +2272,7 @@ static inline int position_evaluate(int cnt,int depth)
 }
 
 
-
-static inline int MiniMax(int depth, bool Maximizing)
+static inline int MMiniMax(int depth, bool Maximizing)
 {
 	Moves moves[1];
 	generate_moves(moves);
@@ -2173,7 +2295,7 @@ static inline int MiniMax(int depth, bool Maximizing)
 	}
 
 	if (depth == 0 || cnt == 0)
-		return position_evaluate(cnt,depth);
+		return Mposition_evaluate(cnt,depth);
 
 	if (Maximizing)//white
 	{
@@ -2190,7 +2312,7 @@ static inline int MiniMax(int depth, bool Maximizing)
 			}			
 
 
-			int eval = MiniMax(depth - 1, false);
+			int eval = MMiniMax(depth - 1, false);
 
 			take_back();
 
@@ -2213,7 +2335,7 @@ static inline int MiniMax(int depth, bool Maximizing)
 				continue;
 			}			
 
-			int eval = MiniMax(depth - 1, true);
+			int eval = MMiniMax(depth - 1, true);
 
 			take_back();
 		
@@ -2223,11 +2345,6 @@ static inline int MiniMax(int depth, bool Maximizing)
 		return mineval;
 	}
 }
-
-
-
-
-
 
 
 ////not working
@@ -2297,15 +2414,7 @@ static inline int MiniMax(int depth, bool Maximizing)
 //}
 
 
-
-
-
-
-
-
-
-
-int get_best_move(int depth)
+int Mget_best_move(int depth)
 {
 	Moves moves[1];
 	generate_moves(moves);
@@ -2328,9 +2437,10 @@ int get_best_move(int depth)
 				continue;
 			}
 			
-			int eval = MiniMax(depth - 1, false);
+			int eval = MMiniMax(depth - 1, false);
 			printf("no%d  score: %d  move:",(i+1), eval);
 			print_move(moves->moves[i]);
+			printf("\n");
 
 			take_back();
 
@@ -2363,9 +2473,10 @@ int get_best_move(int depth)
 				continue;
 			}
 
-			int eval = MiniMax(depth - 1, true);
+			int eval = MMiniMax(depth - 1, true);
 			printf("no%d  score: %d  move:", (i + 1), eval);
 			print_move(moves->moves[i]);
+			printf("\n");
 
 
 
@@ -2393,17 +2504,293 @@ int get_best_move(int depth)
 	return bestmoves[rand() % bestmoves.size()];
 }
 
-void search_position(int depth)
+void Msearch_position(int depth)
 {
 	printf("depth:%d\n", depth);
 	//printf("bestmove d2d4\n");
 
-	int best = get_best_move(depth);
+	int best = Mget_best_move(depth);
 
 	printf("bestmove ");
 	print_move(best);
 }
 
+#pragma endregion
+/****************************************\
+ ========================================
+				Evaluation
+ ========================================
+\****************************************/
+#pragma region
+// material scrore
+
+/*
+	♙ =   100   = ♙
+	♘ =   300   = ♙ * 3
+	♗ =   350   = ♙ * 3 + ♙ * 0.5
+	♖ =   500   = ♙ * 5
+	♕ =   1000  = ♙ * 10
+	♔ =   10000 = ♙ * 100
+
+*/
+
+const int material_score[12] = 
+{
+	100,      // white pawn score
+	300,      // white knight scrore
+	350,      // white bishop score
+	500,      // white rook score
+   1000,      // white queen score
+  10000,      // white king score
+   -100,      // black pawn score
+   -300,      // black knight scrore
+   -350,      // black bishop score
+   -500,      // black rook score
+  -1000,      // black queen score
+ -10000,      // black king score
+};
+
+// pawn positional score
+const int pawn_score[64] =
+{
+	90,  90,  90,  90,  90,  90,  90,  90,
+	30,  30,  30,  40,  40,  30,  30,  30,
+	20,  20,  20,  30,  30,  30,  20,  20,
+	10,  10,  10,  20,  20,  10,  10,  10,
+	 5,   5,  10,  20,  20,   5,   5,   5,
+	 0,   0,   0,   5,   5,   0,   0,   0,
+	 0,   0,   0, -10, -10,   0,   0,   0,
+	 0,   0,   0,   0,   0,   0,   0,   0
+};
+
+// knight positional score
+const int knight_score[64] =
+{
+	-5,   0,   0,   0,   0,   0,   0,  -5,
+	-5,   0,   0,  10,  10,   0,   0,  -5,
+	-5,   5,  20,  20,  20,  20,   5,  -5,
+	-5,  10,  20,  30,  30,  20,  10,  -5,
+	-5,  10,  20,  30,  30,  20,  10,  -5,
+	-5,   5,  20,  10,  10,  20,   5,  -5,
+	-5,   0,   0,   0,   0,   0,   0,  -5,
+	-5, -10,   0,   0,   0,   0, -10,  -5
+};
+
+// bishop positional score
+const int bishop_score[64] =
+{
+	 0,   0,   0,   0,   0,   0,   0,   0,
+	 0,   0,   0,   0,   0,   0,   0,   0,
+	 0,  20,   0,  10,  10,   0,  20,   0,
+	 0,   0,  10,  20,  20,  10,   0,   0,
+	 0,   0,  10,  20,  20,  10,   0,   0,
+	 0,  10,   0,   0,   0,   0,  10,   0,
+	 0,  30,   0,   0,   0,   0,  30,   0,
+	 0,   0, -10,   0,   0, -10,   0,   0
+};
+
+// rook positional score
+const int rook_score[64] =
+{
+	50,  50,  50,  50,  50,  50,  50,  50,
+	50,  50,  50,  50,  50,  50,  50,  50,
+	 0,   0,  10,  20,  20,  10,   0,   0,
+	 0,   0,  10,  20,  20,  10,   0,   0,
+	 0,   0,  10,  20,  20,  10,   0,   0,
+	 0,   0,  10,  20,  20,  10,   0,   0,
+	 0,   0,  10,  20,  20,  10,   0,   0,
+	 0,   0,   0,  20,  20,   0,   0,   0
+
+};
+
+// king positional score
+const int king_score[64] =
+{
+	 0,   0,   0,   0,   0,   0,   0,   0,
+	 0,   0,   5,   5,   5,   5,   0,   0,
+	 0,   5,   5,  10,  10,   5,   5,   0,
+	 0,   5,  10,  20,  20,  10,   5,   0,
+	 0,   5,  10,  20,  20,  10,   5,   0,
+	 0,   0,   5,  10,  10,   5,   0,   0,
+	 0,   5,   5,  -5,  -5,   0,   5,   0,
+	 0,   0,   5,   0, -15,   0,  10,   0
+};
+
+// mirror positional score tables for opposite side
+const int mirror_score[128] =
+{
+	a1, b1, c1, d1, e1, f1, g1, h1,
+	a2, b2, c2, d2, e2, f2, g2, h2,
+	a3, b3, c3, d3, e3, f3, g3, h3,
+	a4, b4, c4, d4, e4, f4, g4, h4,
+	a5, b5, c5, d5, e5, f5, g5, h5,
+	a6, b6, c6, d6, e6, f6, g6, h6,
+	a7, b7, c7, d7, e7, f7, g7, h7,
+	a8, b8, c8, d8, e8, f8, g8, h8
+};
+
+/*
+		  Rank mask            File mask           Isolated mask        Passed pawn mask
+		for square a6        for square f2         for square g2          for square c4
+	8  0 0 0 0 0 0 0 0    8  0 0 0 0 0 1 0 0    8  0 0 0 0 0 1 0 1     8  0 1 1 1 0 0 0 0
+	7  0 0 0 0 0 0 0 0    7  0 0 0 0 0 1 0 0    7  0 0 0 0 0 1 0 1     7  0 1 1 1 0 0 0 0
+	6  1 1 1 1 1 1 1 1    6  0 0 0 0 0 1 0 0    6  0 0 0 0 0 1 0 1     6  0 1 1 1 0 0 0 0
+	5  0 0 0 0 0 0 0 0    5  0 0 0 0 0 1 0 0    5  0 0 0 0 0 1 0 1     5  0 1 1 1 0 0 0 0
+	4  0 0 0 0 0 0 0 0    4  0 0 0 0 0 1 0 0    4  0 0 0 0 0 1 0 1     4  0 0 0 0 0 0 0 0
+	3  0 0 0 0 0 0 0 0    3  0 0 0 0 0 1 0 0    3  0 0 0 0 0 1 0 1     3  0 0 0 0 0 0 0 0
+	2  0 0 0 0 0 0 0 0    2  0 0 0 0 0 1 0 0    2  0 0 0 0 0 1 0 1     2  0 0 0 0 0 0 0 0
+	1  0 0 0 0 0 0 0 0    1  0 0 0 0 0 1 0 0    1  0 0 0 0 0 1 0 1     1  0 0 0 0 0 0 0 0
+	   a b c d e f g h       a b c d e f g h       a b c d e f g h        a b c d e f g h
+*/
+
+
+static inline int evaluate()
+{
+	int score = 0;
+
+	//current pieces bitboard copy
+	U64 bitboard;
+
+	//init piece and score
+	int piece, square;
+
+
+	for (int bb_piece = P; bb_piece <= k; bb_piece++)
+	{
+		bitboard = bitboards[bb_piece];
+
+		while (bitboard)
+		{
+			piece = bb_piece;
+			square = get_lsb_index(bitboard);
+
+			//material score
+			score += material_score[piece];
+
+			//positional score
+			switch (piece)
+			{
+				//white
+				case P: score += pawn_score[square]; break;
+				case N: score += knight_score[square]; break;
+				case B: score += bishop_score[square]; break;
+				case R: score += rook_score[square]; break;			
+				case K: score += king_score[square]; break;
+				//black
+				case p: score -= pawn_score[mirror_score[square]]; break;
+				case n: score -= knight_score[mirror_score[square]]; break;
+				case b: score -= bishop_score[mirror_score[square]]; break;
+				case r: score -= rook_score[mirror_score[square]]; break;
+				case k: score -= king_score[mirror_score[square]]; break;
+
+				default: break;
+			}
+
+
+			//pop lsb bit
+			pop_bit(bitboard, square);
+		}
+	}
+
+
+	return (side == WHITE) ? score : -score;
+}
+
+
+#pragma endregion
+/****************************************\
+ ========================================
+				Search
+ ========================================
+\****************************************/
+#pragma region
+
+//alpha = maximizing
+//beta = minimizing
+
+//half move counter
+int ply;
+
+//best move
+int best_move;
+
+static inline int negamax(int alpha, int beta, int depth)
+{
+	if (depth == 0)	
+		return evaluate();
+	
+	//number of nodes
+	nodes++;
+
+	int current_best = 0;
+	int old_alpha = alpha;
+
+	Moves moves[1];
+	generate_moves(moves);
+
+
+	for (int i = 0; i < moves->count; i++)
+	{
+		copy_board();
+
+		ply++;
+
+		if (!make_move(moves->moves[i], ALL_MOVES))
+		{
+			take_back();
+			ply--;
+			continue;
+		}
+		
+		int score = -negamax(-beta, -alpha, depth - 1);
+
+		ply--;
+		take_back();
+
+		//fails high
+		if (score >= beta) return beta;
+
+		if (score > alpha)
+		{
+			//PV node (Prinsipal variation)
+			alpha = score;
+
+			//root move
+			if (ply == 0)
+			{
+				current_best = moves->moves[i];
+			}
+		}
+
+
+	}
+
+
+	if (old_alpha != alpha)//best move
+		best_move = current_best;
+
+	//fails low
+	return alpha;
+
+}
+
+void search_position(int depth)
+{
+	//printf("depth:%d\n", depth);
+	//printf("bestmove d2d4\n");
+
+	int score = negamax(-50000, 50000, depth);
+
+
+	//best_move = Mget_best_move(depth);
+
+
+	printf("bestmove ");
+	print_move(best_move);
+	printf("\n");
+}
+
+#pragma endregion
 /****************************************\
  ========================================
 				 UCI
@@ -2545,9 +2932,7 @@ void parse_go(const char* command)
 
 	//printf("depth:%d\n", depth);
 
-	search_position(depth);	
-
-
+	search_position(depth);
 }
 
 
@@ -2557,7 +2942,6 @@ void parse_go(const char* command)
 * GUI -> ucinewgame
 * 
 */
-
 
 //main uci loop
 
@@ -2637,6 +3021,41 @@ void uci_loop()
  ========================================
 \****************************************/
 
+int main()
+{   //use %ls for wchar
+	
+	init_all();	
+	
+	
+	int debug = 0;
+
+	if (debug)
+	{
+		parse_fen(start_position);
+		print_board();
+		search_position(4);
+		//perft_test(5);
+
+		//print_board();
+		//printf("score: %d\n", evaluate());
+
+	}
+	else
+		uci_loop();
+	
+
+	std::wcin.get();
+	return 0;
+}
+
+
+
+
+
+
+
+
+
 
 void Test1(int size)
 {
@@ -2688,7 +3107,7 @@ void Test2(int size)
 
 	printf("Method 2 Time:%.2LF (MS)\n", elapsedMS);
 
-	printf("%d\n",res);
+	printf("%d\n", res);
 }
 
 void rec(int num)
@@ -2721,31 +3140,4 @@ void norec(int num)
 		std::cout << stack.top() << " ";
 		stack.pop();
 	}
-}
-
-
-
-int main()
-{   //use %ls for wchar
-	
-	init_all();	
-	
-	//parse_fen(tricky_position);
-
-	uci_loop();
-
-
-	/*auto startTime = std::chrono::high_resolution_clock::now();
-	print_move(get_best_move(4));
-	auto endTime = std::chrono::high_resolution_clock::now();
-
-	auto elapsedMicro = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count();
-	auto elapsedMS = ((long double)elapsedMicro) / 1000;
-	auto elapsedS = elapsedMS / 1000;
-
-	printf("Total Time:%.2LF (MS)\n", elapsedMS);*/
-
-	
-	//std::wcin.get();
-	return 0;
 }

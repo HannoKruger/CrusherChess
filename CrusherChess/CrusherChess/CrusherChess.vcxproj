@@ -157,12 +157,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="ConsoleColours.cpp" />
     <ClCompile Include="CrusherChess.cpp" />
-    <ClCompile Include="Search.cpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="CrusherChess.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
