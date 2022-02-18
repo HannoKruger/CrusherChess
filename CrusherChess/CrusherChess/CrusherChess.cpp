@@ -98,6 +98,7 @@ static inline U64 get_bishop_attacks(int square, U64 occupancy);
 static inline U64 get_rook_attacks(int square, U64 occupancy);
 static inline bool is_square_attacked(int square, int side);
 
+static inline int score_move(int move);
 
 //void search_position(int depth);
 #pragma endregion
@@ -810,6 +811,16 @@ void test_move_encoding()
 	printf("double:%s\n", (get_move_double(move) ? "1" : "0"));
 	printf("enpassant:%s\n", (get_move_enpassant(move) ? "1" : "0"));
 	printf("Castle:%s\n", (get_move_castling(move) ? "1" : "0"));
+}
+
+void print_moves_scores(Moves* moves)
+{
+	printf("move scores: \n");
+	for (int i = 0; i < moves->count; i++)
+	{
+		print_move(moves->moves[i]);
+		printf(" score: %d\n", score_move(moves->moves[i]));
+	}
 }
 
 
@@ -1911,11 +1922,12 @@ static inline void generate_moves(Moves* move_list)
 	}
 }
 
-static inline int make_move(int move, int move_flag)
+static inline int make_move(int move)
 {
+
 	//only make move if move_flag == all_moves or if it is a capture move
-	if (move_flag == ALL_MOVES || get_move_capture(move))
-	{
+	//if (move_flag == ALL_MOVES || get_move_capture(move))
+	//{
 		//copy_board();
 
 		//parse move
@@ -2090,10 +2102,10 @@ static inline int make_move(int move, int move_flag)
 			// return legal move
 			return 1;
 
-	}
+	//}
 	//dont make move
-	else		
-		return 0;					
+	//else		
+	//	return 0;					
 }
 
 
@@ -2128,7 +2140,7 @@ static inline void perft_driver(int depth)
 		
 
 		// make move
-		if (!make_move(move_list->moves[move_count], ALL_MOVES))
+		if (!make_move(move_list->moves[move_count]))
 		{
 			take_back();
 			continue;
@@ -2159,7 +2171,7 @@ void perft_test(int depth)
 			auto move = move_list->moves[move_count];
 
 			// make move
-			if (!make_move(move, ALL_MOVES)) 
+			if (!make_move(move)) 
 			{
 				take_back();
 				continue;
@@ -2281,7 +2293,7 @@ static inline int MMiniMax(int depth, bool Maximizing)
 	for (int i = 0; i < moves->count; i++)
 	{
 		copy_board();
-		if (!make_move(moves->moves[i], ALL_MOVES))
+		if (!make_move(moves->moves[i]))
 		{
 			take_back();
 			continue;
@@ -2305,7 +2317,7 @@ static inline int MMiniMax(int depth, bool Maximizing)
 		{		
 			copy_board();
 
-			if (!make_move(moves->moves[i], ALL_MOVES))
+			if (!make_move(moves->moves[i]))
 			{
 				take_back();
 				continue;
@@ -2329,7 +2341,7 @@ static inline int MMiniMax(int depth, bool Maximizing)
 		{			
 			copy_board();
 
-			if (!make_move(moves->moves[i], ALL_MOVES))
+			if (!make_move(moves->moves[i]))
 			{
 				take_back();
 				continue;
@@ -2431,7 +2443,7 @@ int Mget_best_move(int depth)
 		{
 			copy_board();
 
-			if (!make_move(moves->moves[i], ALL_MOVES))
+			if (!make_move(moves->moves[i]))
 			{
 				take_back();
 				continue;
@@ -2467,7 +2479,7 @@ int Mget_best_move(int depth)
 		{		
 			copy_board();
 
-			if (!make_move(moves->moves[i], ALL_MOVES))
+			if (!make_move(moves->moves[i]))
 			{
 				take_back();
 				continue;
@@ -2534,8 +2546,9 @@ void Msearch_position(int depth)
 
 */
 
-const int material_score[12] = 
-{
+
+
+const int material_score[12] = {
 	100,      // white pawn score
 	300,      // white knight scrore
 	350,      // white bishop score
@@ -2581,12 +2594,13 @@ const int bishop_score[64] =
 {
 	 0,   0,   0,   0,   0,   0,   0,   0,
 	 0,   0,   0,   0,   0,   0,   0,   0,
-	 0,  20,   0,  10,  10,   0,  20,   0,
+	 0,   0,   0,  10,  10,   0,   0,   0,
 	 0,   0,  10,  20,  20,  10,   0,   0,
 	 0,   0,  10,  20,  20,  10,   0,   0,
 	 0,  10,   0,   0,   0,   0,  10,   0,
 	 0,  30,   0,   0,   0,   0,  30,   0,
 	 0,   0, -10,   0,   0, -10,   0,   0
+
 };
 
 // rook positional score
@@ -2628,6 +2642,7 @@ const int mirror_score[128] =
 	a7, b7, c7, d7, e7, f7, g7, h7,
 	a8, b8, c8, d8, e8, f8, g8, h8
 };
+
 
 /*
 		  Rank mask            File mask           Isolated mask        Passed pawn mask
@@ -2697,6 +2712,10 @@ static inline int evaluate()
 }
 
 
+
+
+
+
 #pragma endregion
 /****************************************\
  ========================================
@@ -2705,22 +2724,205 @@ static inline int evaluate()
 \****************************************/
 #pragma region
 
+/*
+   most valuable victim & less valuable attacker
+
+	(Victims) Pawn Knight Bishop   Rook  Queen   King
+  (Attackers)
+		Pawn   105    205    305    405    505    605
+	  Knight   104    204    304    404    504    604
+	  Bishop   103    203    303    403    503    603
+		Rook   102    202    302    402    502    602
+	   Queen   101    201    301    401    501    601
+		King   100    200    300    400    500    600
+*/
+
+// MVV LVA [attacker][victim]
+static int mvv_lva[12][12] = {
+	105, 205, 305, 405, 505, 605,  105, 205, 305, 405, 505, 605,
+	104, 204, 304, 404, 504, 604,  104, 204, 304, 404, 504, 604,
+	103, 203, 303, 403, 503, 603,  103, 203, 303, 403, 503, 603,
+	102, 202, 302, 402, 502, 602,  102, 202, 302, 402, 502, 602,
+	101, 201, 301, 401, 501, 601,  101, 201, 301, 401, 501, 601,
+	100, 200, 300, 400, 500, 600,  100, 200, 300, 400, 500, 600,
+
+	105, 205, 305, 405, 505, 605,  105, 205, 305, 405, 505, 605,
+	104, 204, 304, 404, 504, 604,  104, 204, 304, 404, 504, 604,
+	103, 203, 303, 403, 503, 603,  103, 203, 303, 403, 503, 603,
+	102, 202, 302, 402, 502, 602,  102, 202, 302, 402, 502, 602,
+	101, 201, 301, 401, 501, 601,  101, 201, 301, 401, 501, 601,
+	100, 200, 300, 400, 500, 600,  100, 200, 300, 400, 500, 600
+};
+
+const int ply_size = 64;//can increase in future?
+
+//killer moves [id][ply]
+int killer_moves[2][ply_size] = {};
+
+//history moves [piece][square]
+int history_moves[12][ply_size] = {};
+
+
 //alpha = maximizing
 //beta = minimizing
 
 //half move counter
-int ply;
+int ply = 0;
 
 //best move
-int best_move;
+int best_move = 0;
+
+int move_scores[255];
+
+static inline int score_move(int move)
+{	
+	if (get_move_capture(move))
+	{		
+		int target_piece = P;
+
+		int start_piece, end_piece;
+
+		int target_square = get_move_target(move);
+
+		//white to move
+		if (side == WHITE) { start_piece = p; end_piece = k; }
+		//black to move
+		else { start_piece = P;	end_piece = K; }
+
+		//loop only over oppsite side pieces
+		for (int bb_piece = start_piece; bb_piece <= end_piece; bb_piece++)
+		{
+			//if piece on target square remove it
+			if (get_bit(bitboards[bb_piece], target_square))
+			{
+				target_piece = bb_piece;
+				break;
+			}	
+		}
+		//score capture
+		return mvv_lva[get_move_piece(move)][target_piece] + 10000;		
+	}
+	else//score quiet move
+	{
+		//score ist killer move
+		if (killer_moves[0][ply] == move)
+			return 9000;
+		//score 2nd killer  move
+		else if (killer_moves[1][ply] == move)
+			return 8000;
+		//score history move
+		else
+			return history_moves[get_move_piece(move)][get_move_target(move)];
+	}
+
+	return 0;
+}
+
+
+static inline void sort_moves(Moves* move_list)
+{	
+	for (int i = 0; i < move_list->count; i++)	
+		move_scores[i] = score_move(move_list->moves[i]);
+
+	//bubble sort
+	for (int i = 0; i < move_list->count; i++)
+	{
+		for (int j = i + 1; j < move_list->count; j++)
+		{
+			if (move_scores[i] < move_scores[j])
+			{			
+				//swap scores
+				std::swap(move_scores[i], move_scores[j]);
+				//swap moves
+				std::swap(move_list->moves[i], move_list->moves[j]);
+			}
+		}
+	}
+}
+
+static inline int quiescence(int alpha,int beta)
+{
+	nodes++;
+
+	int eval = evaluate();
+
+
+	//fails high
+	if (eval >= beta) 
+		return beta;
+	//better move
+	if (eval > alpha)
+	{
+		//PV node (Prinsipal variation)
+		alpha = eval;
+	}
+
+
+	Moves moves[1];
+	generate_moves(moves);
+
+	sort_moves(moves);//sort!
+
+	for (int i = 0; i < moves->count; i++)
+	{
+		//if (!get_move_capture(moves->moves[i]))
+		//	continue;
+
+
+		copy_board();
+
+		ply++;	
+
+		if (!make_move(moves->moves[i]) || !get_move_capture(moves->moves[i]))
+		{
+			take_back();
+			
+			ply--;
+			continue;
+		}
+		
+		
+		int score = -quiescence(-beta, -alpha);
+					
+		ply--;
+		take_back();
+
+		
+
+		//fails high
+		if (score >= beta)
+			return beta;
+		//better move
+		if (score > alpha)
+		{
+			//PV node (Prinsipal variation)
+			alpha = score;
+		
+		}
+	}
+	//fails low
+	return alpha;
+}
+
 
 static inline int negamax(int alpha, int beta, int depth)
-{
-	if (depth == 0)	
-		return evaluate();
+{	
+	if (depth == 0)
+		//run quisuince
+		return quiescence(alpha, beta);
 	
 	//number of nodes
 	nodes++;
+
+	int in_check = is_square_attacked(
+	(side == WHITE ? get_lsb_index(bitboards[K]) :
+					 get_lsb_index(bitboards[k])),	side ^ 1);
+
+
+	if (in_check) depth++;//search further when in check
+
+
+	int legal_count = 0;
 
 	int current_best = 0;
 	int old_alpha = alpha;
@@ -2728,6 +2930,7 @@ static inline int negamax(int alpha, int beta, int depth)
 	Moves moves[1];
 	generate_moves(moves);
 
+	sort_moves(moves);//sort!
 
 	for (int i = 0; i < moves->count; i++)
 	{
@@ -2735,13 +2938,15 @@ static inline int negamax(int alpha, int beta, int depth)
 
 		ply++;
 
-		if (!make_move(moves->moves[i], ALL_MOVES))
+		if (!make_move(moves->moves[i]))
 		{
 			take_back();
 			ply--;
 			continue;
 		}
-		
+		legal_count++;
+
+
 		int score = -negamax(-beta, -alpha, depth - 1);
 
 		ply--;
@@ -2749,7 +2954,7 @@ static inline int negamax(int alpha, int beta, int depth)
 
 		//fails high
 		if (score >= beta) return beta;
-
+		//better move
 		if (score > alpha)
 		{
 			//PV node (Prinsipal variation)
@@ -2761,33 +2966,46 @@ static inline int negamax(int alpha, int beta, int depth)
 				current_best = moves->moves[i];
 			}
 		}
-
-
+	}
+	//no legal moves
+	if (legal_count == 0)
+	{
+		if (in_check)
+			return -49000 + ply;
+		else//stalemate
+			return 0;
 	}
 
-
-	if (old_alpha != alpha)//best move
+	//new best move
+	if (old_alpha != alpha)
 		best_move = current_best;
 
 	//fails low
 	return alpha;
-
 }
+
 
 void search_position(int depth)
 {
+	nodes = 0ULL;
+
 	//printf("depth:%d\n", depth);
 	//printf("bestmove d2d4\n");
 
 	int score = negamax(-50000, 50000, depth);
 
+	//printf("score %d",score);
 
 	//best_move = Mget_best_move(depth);
 
+	if (best_move)
+	{
+		printf("info score cp %d depth %d nodes %llu\n", score, depth, nodes);
 
-	printf("bestmove ");
-	print_move(best_move);
-	printf("\n");
+		printf("bestmove ");
+		print_move(best_move);
+		printf("\n");
+	}
 }
 
 #pragma endregion
@@ -2897,7 +3115,7 @@ void parse_position(const char* command)
 			if (move == 0)
 				break;//invalide move
 
-			make_move(move, ALL_MOVES);
+			make_move(move);
 
 			/*printf("%s\n",current);
 			std::cout << "cout:" << *current << std::endl;*/
@@ -3027,17 +3245,28 @@ int main()
 	init_all();	
 	
 	
-	int debug = 0;
+	int debug = 1;
 
 	if (debug)
 	{
-		parse_fen(start_position);
+		parse_fen(tricky_position);
 		print_board();
-		search_position(4);
-		//perft_test(5);
+		search_position(1);
 
-		//print_board();
-		//printf("score: %d\n", evaluate());
+		Moves moves[1];	
+		generate_moves(moves);
+	
+		//killer
+		killer_moves[0][ply] = moves->moves[3];
+
+		//history
+
+
+		print_moves_scores(moves);
+
+	    sort_moves(moves);
+		printf("\n\n");
+		print_moves_scores(moves);
 
 	}
 	else
@@ -3057,87 +3286,87 @@ int main()
 
 
 
-void Test1(int size)
-{
-	U64 num = 0xffffffffffffffff;
-	auto numcopy = num;
-
-	int res = 0;
-
-	auto startTime = std::chrono::high_resolution_clock::now();
-	for (int i = 0; i < size; i++)
-	{
-		res = 0;
-
-		while (num)
-		{
-			num &= num - 1;
-			++res;
-		}
-
-
-		num = --numcopy;
-	}
-	auto endTime = std::chrono::high_resolution_clock::now();
-
-	auto elapsedMicro = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count();
-	auto elapsedMS = ((long double)elapsedMicro) / 1000;
-
-
-	printf("Method 1 Time:%.2LF (MS)\n", elapsedMS);
-
-	printf("%d\n", res);
-}
-void Test2(int size)
-{
-	U64 num = 0xffffffffffffffff;
-	int res = 0;
-
-	auto startTime = std::chrono::high_resolution_clock::now();
-	for (int i = 0; i < size; i++)
-	{
-		res = std::popcount(num);
-		num--;
-	}
-	auto endTime = std::chrono::high_resolution_clock::now();
-
-	auto elapsedMicro = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count();
-	auto elapsedMS = ((long double)elapsedMicro) / 1000;
-
-
-	printf("Method 2 Time:%.2LF (MS)\n", elapsedMS);
-
-	printf("%d\n", res);
-}
-
-void rec(int num)
-{
-	if (num < 1)
-		return;
-	else
-	{
-		std::cout << num << " ";
-		rec(num - 1);
-		std::cout << num << " ";
-		return;
-	}
-}
-
-std::stack<int> stack;
-
-void norec(int num)
-{
-	while (num > 0)
-	{
-		std::cout << num << " ";
-
-		stack.push(num);
-
-		num--;
-	}
-	while (!stack.empty())
-	{
-		std::cout << stack.top() << " ";
-		stack.pop();
-	}
-}
+//void Test1(int size)
+//{
+//	U64 num = 0xffffffffffffffff;
+//	auto numcopy = num;
+//
+//	int res = 0;
+//
+//	auto startTime = std::chrono::high_resolution_clock::now();
+//	for (int i = 0; i < size; i++)
+//	{
+//		res = 0;
+//
+//		while (num)
+//		{
+//			num &= num - 1;
+//			++res;
+//		}
+//
+//
+//		num = --numcopy;
+//	}
+//	auto endTime = std::chrono::high_resolution_clock::now();
+//
+//	auto elapsedMicro = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count();
+//	auto elapsedMS = ((long double)elapsedMicro) / 1000;
+//
+//
+//	printf("Method 1 Time:%.2LF (MS)\n", elapsedMS);
+//
+//	printf("%d\n", res);
+//}
+//void Test2(int size)
+//{
+//	U64 num = 0xffffffffffffffff;
+//	int res = 0;
+//
+//	auto startTime = std::chrono::high_resolution_clock::now();
+//	for (int i = 0; i < size; i++)
+//	{
+//		res = std::popcount(num);
+//		num--;
+//	}
+//	auto endTime = std::chrono::high_resolution_clock::now();
+//
+//	auto elapsedMicro = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count();
+//	auto elapsedMS = ((long double)elapsedMicro) / 1000;
+//
+//
+//	printf("Method 2 Time:%.2LF (MS)\n", elapsedMS);
+//
+//	printf("%d\n", res);
+//}
+//
+//void rec(int num)
+//{
+//	if (num < 1)
+//		return;
+//	else
+//	{
+//		std::cout << num << " ";
+//		rec(num - 1);
+//		std::cout << num << " ";
+//		return;
+//	}
+//}
+//
+//std::stack<int> stack;
+//
+//void norec(int num)
+//{
+//	while (num > 0)
+//	{
+//		std::cout << num << " ";
+//
+//		stack.push(num);
+//
+//		num--;
+//	}
+//	while (!stack.empty())
+//	{
+//		std::cout << stack.top() << " ";
+//		stack.pop();
+//	}
+//}
