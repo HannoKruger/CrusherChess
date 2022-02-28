@@ -17,7 +17,7 @@
 #include <wtypes.h>
 #include <vector>
 #include <ostream>
-#include <Windows.h>
+//#include <Windows.h>
 #include <consoleapi2.h>
 #include <assert.h>
 
@@ -39,7 +39,6 @@ private:
 
 
 
-
 typedef unsigned long long U64;
 //move list
 typedef struct Moves
@@ -56,8 +55,8 @@ typedef struct Moves
 } Moves;
 
 // FEN dedug positions
-#define empty_board "8/8/8/8/8/8/8/8 b - - "
-#define start_position "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 "
+#define empty_board "8/8/8/8/8/8/8/8 b - - "                       
+#define start_position "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 "                    
 #define tricky_position "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 "
 constexpr auto killer_position = "rnbqkb1r/pp1p1pPp/8/2p1pP2/1P1P4/3P3P/P1P1P3/RNBQKBNR w KQkq e6 0 1";
 #define cmk_position "r2q1rk1/ppp2ppp/2n1bn2/2b1p3/3pP3/3P1NPP/PPP1NPB1/R1BQ1RK1 b - - 0 9 "
@@ -170,7 +169,7 @@ enum { COLOR_NB = 2 };
 
 /*
 		  binary move bits              name        BitCount   hex constants
-													    
+
 	0000 0000 0000 0000 0011 1111   source square       6      0x3f
 	0000 0000 0000 1111 1100 0000   target square       6      0xfc0
 	0000 0000 1111 0000 0000 0000   piece               4      0xf000
@@ -178,7 +177,7 @@ enum { COLOR_NB = 2 };
 	0001 0000 0000 0000 0000 0000   capture flag        1      0x100000
 	0010 0000 0000 0000 0000 0000   double push flag    1      0x200000
 	0100 0000 0000 0000 0000 0000   enpassant flag      1      0x400000
-	1000 0000 0000 0000 0000 0000   castling flag       1      0x800000  
+	1000 0000 0000 0000 0000 0000   castling flag       1      0x800000
 */
 
 #define encode_move(SOURCE, TARGET, PIECE, PROMOTED_PIECE, CAPTURE, DOUBLE_PAWN, ENPASSANT, CASTLING)\
@@ -467,7 +466,7 @@ const U64 bishop_magic_numbers[64] =
 /*
 						   castling   move     in      in
 							  right update     binary  decimal
-							          BBWW
+									  BBWW
  king & rooks didn't move:     1111 & 1111  =  1111    15
 		white king  moved:     1111 & 1100  =  1100    12
   white king's rook moved:     1111 & 1110  =  1110    14
@@ -479,7 +478,7 @@ const U64 bishop_magic_numbers[64] =
 */
 
 // castling rights update constants
-const int castling_rights[64] = 
+const int castling_rights[64] =
 {
 	 7, 15, 15, 15,  3, 15, 15, 11,
 	15, 15, 15, 15, 15, 15, 15, 15,
@@ -514,6 +513,8 @@ int enpassant = NO_SQ;
 //castling rights
 int castle = 0;
 
+//"almost" unique position identifier aka hash key
+U64 hash_key = 0ULL;
 
 
 //leaper attacks
@@ -535,10 +536,206 @@ unsigned int random_state = 1804289383;
 #pragma endregion
 /****************************************\
  ========================================
+			 Zobrist keys
+ ========================================
+\****************************************/
+#pragma region
+
+//Random piece keys [piece][square]
+U64 piece_keys[12][SQUARE_NB];
+
+//Random enpassant keys
+U64 enpassant_keys[SQUARE_NB];
+
+//Random castling keys
+U64 castle_keys[16];
+
+//random side key
+U64 side_key;
+
+void init_random_keys()
+{
+	//make sure random seed is reset
+	random_state = 1804289383;
+
+	//loop over piece codes
+	for (int piece = P; piece <= k; piece++)
+	{
+		//assign random piece key
+		for (int square = 0; square < SQUARE_NB; square++)
+			piece_keys[piece][square] = randu64();
+	}
+	//loop over board
+	for (int square = 0; square < SQUARE_NB; square++)
+		enpassant_keys[square] = randu64();
+
+	//init castle keys
+	for (int i = 0; i < 16; i++)
+		castle_keys[i] = randu64();
+
+	//init random side key	
+	side_key = randu64();
+}
+
+#pragma endregion
+/****************************************\
+ ========================================
+				Hasing
+ ========================================
+\****************************************/
+#pragma region
+
+//generate almost unique ID
+U64 generate_hash_key()
+{
+	U64 final_key = 0ULL;
+	U64 bitboard;
+
+	for (int piece = P; piece <= k; piece++)
+	{
+		bitboard = bitboards[piece];
+
+		//loop over pieces
+		while (bitboard)
+		{
+			int square = get_lsb_index(bitboard);
+
+			//hash piece
+			final_key ^= piece_keys[piece][square];
+
+			//pop lsb
+			pop_bit(bitboard, square);
+		}
+	}
+	//hash enpasant
+	if (enpassant != NO_SQ)//Can remove this?
+		final_key ^= enpassant_keys[enpassant];
+	//hash castle	
+	final_key ^= castle_keys[castle];
+
+	if (side == BLACK)
+		final_key ^= side_key;
+
+	return final_key;
+}
+
+#pragma endregion
+/****************************************\
+ ========================================
 		   Debug + Input & output
  ========================================
 \****************************************/
 #pragma region
+
+int get_piece(int file,int rank)
+{
+	int piece = -1;
+
+	for (int i = P; i <= k; i++)
+	{
+		if (get_bit(bitboards[i], (rank * 8 + file)))
+		{
+			piece = i;
+			break;
+		}
+	}
+	return piece;
+}
+
+std::string get_fen_Stocfish_Version_not_working()
+{
+	int emptyCnt;
+	std::ostringstream ss;
+
+	const std::string PieceToChar("pnbrqkPNBRQK");
+
+	for (int r = 7; r >= 0; --r)	
+	{
+		for (int f = 0; f <= 7; ++f)
+		{					
+			for (emptyCnt = 0; f <= 7 && (get_piece(f,r) == -1); ++f)
+				++emptyCnt;
+			
+			if (emptyCnt)
+				ss << emptyCnt;
+
+			if (f <= 7)
+			{	
+				int piece = get_piece(f, r);
+
+				if (piece != -1)
+					ss << PieceToChar[piece];
+				else
+					ss << ' ';
+			}
+		}
+
+		if (r > 0)
+			ss << '/';
+	}
+
+	ss << (side == WHITE ? " w " : " b ");
+
+	if (castle & 1)		ss << 'K';
+	if (castle & 2)		ss << 'Q';
+	if (castle & 4)		ss << 'k';
+	if (castle & 8)		ss << 'q';
+	if (!(castle & 15))	ss << '-';
+
+	ss << (enpassant == NO_SQ ? " - " : " " + std::string(square_to_coordinates[enpassant]) + " ");
+	
+	//need to add half and full move counters
+
+	return ss.str();
+}
+
+std::string get_fen()
+{	
+	std::ostringstream ss;
+
+	for (int r = 0; r < 8; r++)
+	{
+		for (int f = 0; f < 8; f++)
+		{
+			int empty = 0;
+
+			while (get_piece(f, r) == -1 && f++ < 8)			
+				empty++;
+			
+			if (empty)
+				ss << empty;		
+
+			if (f <= 7)
+			{
+				int piece = get_piece(f, r);
+
+				if (piece == -1)
+					assert(!"piece is -1");
+
+				ss << ascii_pieces[piece];
+			}					
+		}
+
+		if (r < 7)
+			ss << '/';
+	}
+
+	ss << (side == WHITE ? " w " : " b ");
+
+	if (castle & 1)		ss << 'K';
+	if (castle & 2)		ss << 'Q';
+	if (castle & 4)		ss << 'k';
+	if (castle & 8)		ss << 'q';
+	if (!(castle & 15))	ss << '-';
+
+	ss << (enpassant == NO_SQ ? " - " : " " + std::string(square_to_coordinates[enpassant]) + " ");
+
+	//need to add half and full move counters
+	ss << "0 " << "1";
+	
+	return ss.str();
+}
+
 void print_bitboard(U64 bitboard)
 {
 	wprintf(L"    Bitboard: %llu\n", bitboard);
@@ -612,20 +809,21 @@ void print_board(bool ascii = false)
 		printf("\n");
 	}
 	printf("  a b c d e f g h\n\n");
-	//wprintf(L"\n  \u200Aa\u2000b\u2000c\u2000d\u2000e\u2000f\u2000g\u2000h\n");
-	//wprintf(L"\u2589\u2589a\u2001b\u2001c\u2001d\u2001e\u2001f\u2001g\u2001h\n\n");
-
-	//print side
+		
 	printf("Side: %s\n", side ? "Black" : "White");
-	//print en passant
+	
 	printf("En Passant: %s\n", (enpassant != NO_SQ) ? (square_to_coordinates[enpassant]) : "no");
 
-	printf("Castling: %c%c%c%c\n\n",
+	printf("Castling: %c%c%c%c\n",
 		(castle & WK) ? 'K' : '-',
 		(castle & WQ) ? 'Q' : '-',
 		(castle & BK) ? 'k' : '-',
 		(castle & BQ) ? 'q' : '-'
 	);
+
+	std::cout << "Fen: " << get_fen() << std::endl;
+
+	printf("Key: %llx\n\n", hash_key);
 }
 
 void print_attacked_squares(int side)
@@ -740,6 +938,10 @@ void parse_fen(const char* fen)
 		occupancies[BLACK] |= bitboards[piece];
 	//both
 	occupancies[BOTH] = occupancies[WHITE] | occupancies[BLACK];
+
+	//init hash key
+	hash_key = generate_hash_key();
+
 }
 
 void print_magic_numbers()
@@ -756,16 +958,16 @@ void print_magic_numbers()
 //for uci
 void print_move(int move)
 {
-	if (get_move_promoted(move))	
+	if (get_move_promoted(move))
 		printf("%s%s%c",
-		square_to_coordinates[get_move_source(move)],
-		square_to_coordinates[get_move_target(move)],
-		promoted_pieces[get_move_promoted(move)]
+			square_to_coordinates[get_move_source(move)],
+			square_to_coordinates[get_move_target(move)],
+			promoted_pieces[get_move_promoted(move)]
 		);
 	else
 		printf("%s%s",
 			square_to_coordinates[get_move_source(move)],
-			square_to_coordinates[get_move_target(move)]			
+			square_to_coordinates[get_move_target(move)]
 		);
 }
 
@@ -825,7 +1027,6 @@ void print_moves_scores(Moves* moves)
 	}
 }
 
-
 #pragma endregion
 /****************************************\
  ========================================
@@ -865,20 +1066,20 @@ U64 mask_pawn_attacks(bool side, int square)
 
 	//white
 	if (side == WHITE)
-	{		
+	{
 		auto shift7 = bitboard >> 7;
 		auto shift9 = bitboard >> 9;
-	
+
 
 		if (shift7 & not_a_file) attacks |= shift7;
-		if (shift9 & not_h_file) attacks |= shift9;	
+		if (shift9 & not_h_file) attacks |= shift9;
 	}
 	//black
 	else
-	{		
+	{
 		auto shift7 = bitboard << 7;
 		auto shift9 = bitboard << 9;
-	
+
 
 		if (shift7 & not_h_file) attacks |= shift7;
 		if (shift9 & not_a_file) attacks |= shift9;
@@ -1073,6 +1274,9 @@ void init_all()
 	init_leapers_attacks();
 	init_sliders_attacks(BISHOP);
 	init_sliders_attacks(ROOK);
+	init_random_keys();
+
+	parse_fen(start_position);
 }
 #pragma endregion
 /****************************************\
@@ -1287,7 +1491,7 @@ static inline U64 get_queen_attacks(int square, U64 occupancy)
 \****************************************/
 #pragma region Move Generator
 
-enum {ALL_MOVES, ONLY_CAPTURES};
+enum { ALL_MOVES, ONLY_CAPTURES };
 
 //version 1
 
@@ -1444,7 +1648,7 @@ static inline bool is_square_attacked(int square, int side)
 	//king attacks
 	if (king_attacks[square] & ((side == WHITE) ? bitboards[K] : bitboards[k])) return true;
 
-	
+
 	return false;
 }
 
@@ -1558,7 +1762,7 @@ static inline void generate_moves(Moves* move_list)
 							int target_enpassant = get_lsb_index(enpassant_attacks);
 
 							//printf("w pawn enpassant capture: %s%s\n", square_to_coordinates[source_square], square_to_coordinates[target_anpassant]);
-							add_move(move_list, encode_move(source_square, target_enpassant, piece, 0, 1, 0, 1, 0));		
+							add_move(move_list, encode_move(source_square, target_enpassant, piece, 0, 1, 0, 1, 0));
 						}
 
 					}
@@ -1719,7 +1923,7 @@ static inline void generate_moves(Moves* move_list)
 						{
 							//printf("castle BK: e8g8\n");
 
-							add_move(move_list, encode_move(e8, g8,piece,0,0,0,0,1));
+							add_move(move_list, encode_move(e8, g8, piece, 0, 0, 0, 0, 1));
 						}
 					}
 				}
@@ -1756,21 +1960,21 @@ static inline void generate_moves(Moves* move_list)
 				while (attacks)
 				{
 					target_square = get_lsb_index(attacks);
-						
+
 					//quite move if no piece is captured
 					if (!get_bit(((side == WHITE) ? occupancies[BLACK] : occupancies[WHITE]), target_square))
 					{
 						//printf(" %s%s  knight quite\n", square_to_coordinates[source_square], square_to_coordinates[target_square]);
 						add_move(move_list, encode_move(source_square, target_square, piece, 0, 0, 0, 0, 0));
-						
+
 					}
 					//capture move
 					else
-					{						 					
-					     //printf(" %s%s  knight capture\n", square_to_coordinates[source_square], square_to_coordinates[target_square]);
+					{
+						//printf(" %s%s  knight capture\n", square_to_coordinates[source_square], square_to_coordinates[target_square]);
 						add_move(move_list, encode_move(source_square, target_square, piece, 0, 1, 0, 0, 0));
 					}
-					
+
 					pop_bit(attacks, target_square);
 				}
 
@@ -1787,7 +1991,7 @@ static inline void generate_moves(Moves* move_list)
 				source_square = get_lsb_index(bitboard);
 
 				//current piece attacks to get target                   //not capture white pieces //not capture black pieces
-				attacks = get_bishop_attacks(source_square,occupancies[BOTH]) & ((side == WHITE) ? ~occupancies[WHITE] : ~occupancies[BLACK]);
+				attacks = get_bishop_attacks(source_square, occupancies[BOTH]) & ((side == WHITE) ? ~occupancies[WHITE] : ~occupancies[BLACK]);
 
 				//loop over all attacks
 				while (attacks)
@@ -1933,176 +2137,176 @@ static inline int make_move(int move)
 		//copy_board();
 
 		//parse move
-		int m_source_square = get_move_source(move);
-		int m_target_square = get_move_target(move);
-		int m_capture = get_move_capture(move);
-		int m_piece = get_move_piece(move);
-		int m_promoted_piece = get_move_promoted(move);
-		
-		int m_double_push = get_move_double(move);
-		int m_enpassant = get_move_enpassant(move);
-		int m_castling = get_move_castling(move);
+	int m_source_square = get_move_source(move);
+	int m_target_square = get_move_target(move);
+	int m_capture = get_move_capture(move);
+	int m_piece = get_move_piece(move);
+	int m_promoted_piece = get_move_promoted(move);
 
-		//remove piece
-		pop_bit(bitboards[m_piece], m_source_square);
-		//set piece
-		set_bit(bitboards[m_piece], m_target_square);
+	int m_double_push = get_move_double(move);
+	int m_enpassant = get_move_enpassant(move);
+	int m_castling = get_move_castling(move);
 
-		//now after the move is made do all this
+	//remove piece
+	pop_bit(bitboards[m_piece], m_source_square);
+	//set piece
+	set_bit(bitboards[m_piece], m_target_square);
 
-		//captured piece needs to be removed
-		if (m_capture)
+	//now after the move is made do all this
+
+	//captured piece needs to be removed
+	if (m_capture)
+	{
+		int start_piece, end_piece;
+
+		//white to move
+		if (side == WHITE)
 		{
-			int start_piece, end_piece;
-
-			//white to move
-			if (side == WHITE)
-			{
-				start_piece = p;
-				end_piece = k;
-			}
-			//black to move
-			else
-			{
-				start_piece = P;
-				end_piece = K;
-			}
-
-			//loop only over oppsite side pieces
-			for (int bb_piece = start_piece; bb_piece <= end_piece; bb_piece++)
-			{
-				//if piece on target square remove it
-				if (get_bit(bitboards[bb_piece], m_target_square))
-				{
-					pop_bit(bitboards[bb_piece], m_target_square);
-					break;
-				}
-			}
+			start_piece = p;
+			end_piece = k;
 		}
-
-		//pawn promotions
-		if (m_promoted_piece)
-		{
-			//remove pawn
-			if (side == WHITE)
-			{
-				pop_bit(bitboards[P], m_target_square);
-			}
-			else
-			{
-				pop_bit(bitboards[p], m_target_square);
-			}
-
-			// set promoted piece on chess board
-			set_bit(bitboards[m_promoted_piece], m_target_square);	
-		}
-
-		if (m_enpassant)
-		{			
-			// white to move
-			if (side == WHITE)
-			{
-				// remove captured pawn
-				pop_bit(bitboards[p], m_target_square + 8);
-
-				// remove pawn from hash key
-				//hash_key ^= piece_keys[p][target_square + 8];
-			}			
-			else
-			{
-				// remove captured pawn
-				pop_bit(bitboards[P], m_target_square - 8);
-
-				// remove pawn from hash key
-				//hash_key ^= piece_keys[P][target_square - 8];
-			}
-		}
-
-		//always reset enpassant
-		enpassant = NO_SQ;
-
-		//for enpassant
-		if (m_double_push)
-		{
-			// white to move
-			if (side == WHITE)
-			{				
-				enpassant = m_target_square + 8;
-
-				// hash enpassant
-				//hash_key ^= enpassant_keys[target_square + 8];
-			}
-
-			// black to move
-			else
-			{			
-				enpassant = m_target_square - 8;
-
-				// hash enpassant
-				//hash_key ^= enpassant_keys[target_square - 8];
-			}
-		}
-
-		if (m_castling)
-		{
-			switch (m_target_square)
-			{
-				//WK
-				case g1:
-					pop_bit(bitboards[R], h1);//remove rook
-					set_bit(bitboards[R], f1);//set rook				
-					break;
-			    //WQ
-				case c1:
-					pop_bit(bitboards[R], a1);//remove rook
-					set_bit(bitboards[R], d1);//set rook	
-					break;
-				//BK
-				case g8:
-					pop_bit(bitboards[r], h8);//remove rook
-					set_bit(bitboards[r], f8);//set rook		
-					break;
-				//BQ
-				case c8:
-					pop_bit(bitboards[r], a8);//remove rook
-					set_bit(bitboards[r], d8);//set rook	
-					break;
-			}
-		}
-
-		//update castling rights
-		castle &= castling_rights[m_source_square];
-		castle &= castling_rights[m_target_square];
-		
-		//update occupancies
-		memset(occupancies, 0ULL, 24);
-		//white pieces
-		for (int i = P; i <= K; i++)	
-			occupancies[WHITE] |= bitboards[i];
-		//black pieces
-		for (int i = p; i <= k; i++)
-			occupancies[BLACK] |= bitboards[i];
-		//both
-		occupancies[BOTH] = occupancies[WHITE] | occupancies[BLACK];
-
-
-		//change side
-		side ^= 1;
-
-
-		// make sure that king has not been exposed into a check
-		if (is_square_attacked((side == WHITE) ? get_lsb_index(bitboards[k]) : get_lsb_index(bitboards[K]), side))
-		{
-			// take move back
-			//take_back();
-
-			
-			// return illegal move
-			return 0;
-		}	
+		//black to move
 		else
-			// return legal move
-			return 1;
+		{
+			start_piece = P;
+			end_piece = K;
+		}
+
+		//loop only over oppsite side pieces
+		for (int bb_piece = start_piece; bb_piece <= end_piece; bb_piece++)
+		{
+			//if piece on target square remove it
+			if (get_bit(bitboards[bb_piece], m_target_square))
+			{
+				pop_bit(bitboards[bb_piece], m_target_square);
+				break;
+			}
+		}
+	}
+
+	//pawn promotions
+	if (m_promoted_piece)
+	{
+		//remove pawn
+		if (side == WHITE)
+		{
+			pop_bit(bitboards[P], m_target_square);
+		}
+		else
+		{
+			pop_bit(bitboards[p], m_target_square);
+		}
+
+		// set promoted piece on chess board
+		set_bit(bitboards[m_promoted_piece], m_target_square);
+	}
+
+	if (m_enpassant)
+	{
+		// white to move
+		if (side == WHITE)
+		{
+			// remove captured pawn
+			pop_bit(bitboards[p], m_target_square + 8);
+
+			// remove pawn from hash key
+			//hash_key ^= piece_keys[p][target_square + 8];
+		}
+		else
+		{
+			// remove captured pawn
+			pop_bit(bitboards[P], m_target_square - 8);
+
+			// remove pawn from hash key
+			//hash_key ^= piece_keys[P][target_square - 8];
+		}
+	}
+
+	//always reset enpassant
+	enpassant = NO_SQ;
+
+	//for enpassant
+	if (m_double_push)
+	{
+		// white to move
+		if (side == WHITE)
+		{
+			enpassant = m_target_square + 8;
+
+			// hash enpassant
+			//hash_key ^= enpassant_keys[target_square + 8];
+		}
+
+		// black to move
+		else
+		{
+			enpassant = m_target_square - 8;
+
+			// hash enpassant
+			//hash_key ^= enpassant_keys[target_square - 8];
+		}
+	}
+
+	if (m_castling)
+	{
+		switch (m_target_square)
+		{
+			//WK
+		case g1:
+			pop_bit(bitboards[R], h1);//remove rook
+			set_bit(bitboards[R], f1);//set rook				
+			break;
+			//WQ
+		case c1:
+			pop_bit(bitboards[R], a1);//remove rook
+			set_bit(bitboards[R], d1);//set rook	
+			break;
+			//BK
+		case g8:
+			pop_bit(bitboards[r], h8);//remove rook
+			set_bit(bitboards[r], f8);//set rook		
+			break;
+			//BQ
+		case c8:
+			pop_bit(bitboards[r], a8);//remove rook
+			set_bit(bitboards[r], d8);//set rook	
+			break;
+		}
+	}
+
+	//update castling rights
+	castle &= castling_rights[m_source_square];
+	castle &= castling_rights[m_target_square];
+
+	//update occupancies
+	memset(occupancies, 0ULL, 24);
+	//white pieces
+	for (int i = P; i <= K; i++)
+		occupancies[WHITE] |= bitboards[i];
+	//black pieces
+	for (int i = p; i <= k; i++)
+		occupancies[BLACK] |= bitboards[i];
+	//both
+	occupancies[BOTH] = occupancies[WHITE] | occupancies[BLACK];
+
+
+	//change side
+	side ^= 1;
+
+
+	// make sure that king has not been exposed into a check
+	if (is_square_attacked((side == WHITE) ? get_lsb_index(bitboards[k]) : get_lsb_index(bitboards[K]), side))
+	{
+		// take move back
+		//take_back();
+
+
+		// return illegal move
+		return 0;
+	}
+	else
+		// return legal move
+		return 1;
 
 	//}
 	//dont make move
@@ -2139,7 +2343,7 @@ static inline void perft_driver(int depth)
 	{
 		// preserve board state
 		copy_board();
-		
+
 
 		// make move
 		if (!make_move(move_list->moves[move_count]))
@@ -2152,12 +2356,12 @@ static inline void perft_driver(int depth)
 		perft_driver(depth - 1);
 
 		// take back
-		take_back();	
+		take_back();
 	}
 }
 
 void perft_test(int depth)
-{	
+{
 	auto startTime = std::chrono::high_resolution_clock::now();
 
 	Moves move_list[1];
@@ -2168,17 +2372,17 @@ void perft_test(int depth)
 		for (int move_count = 0; move_count < move_list->count; move_count++)
 		{
 			// preserve board state
-			copy_board();			
+			copy_board();
 
 			auto move = move_list->moves[move_count];
 
 			// make move
-			if (!make_move(move)) 
+			if (!make_move(move))
 			{
 				take_back();
 				continue;
 			}
-			
+
 
 			U64 cumulative_nodes = nodes;
 
@@ -2189,8 +2393,8 @@ void perft_test(int depth)
 			U64 current_nodes = nodes - cumulative_nodes;
 
 			// take back
-			take_back();			
-			
+			take_back();
+
 			printf("%s%s%c  nodes: %llu\n",
 				square_to_coordinates[get_move_source(move)],
 				square_to_coordinates[get_move_target(move)],
@@ -2217,6 +2421,131 @@ void perft_test(int depth)
 #pragma endregion
 /****************************************\
  ========================================
+			  Time control
+ ========================================
+\****************************************/
+#pragma region
+
+bool quit = false;//exit engine flag
+bool time_set = false;//time control availability
+bool stopped = false;//when time is up
+U64 start_time = 0ULL;//uci starttime command
+U64 stop_time = 0ULL;//uci stoptime command
+
+// get time in milliseconds
+U64 get_time_ms()
+{
+	return GetTickCount64();
+}
+
+/*
+  Function to "listen" to GUI's input during search.
+  It's waiting for the user input from STDIN.
+  OS dependent.
+
+  First Richard Allbert aka BluefeverSoftware grabbed it from somewhere...
+  And then Code Monkey King has grabbed it from VICE)
+
+*/
+
+int input_waiting()
+{
+	//must be windows
+
+	static int init = 0, pipe;
+	static HANDLE inh;
+	DWORD dw;
+
+	if (!init)
+	{
+		init = 1;
+		inh = GetStdHandle(STD_INPUT_HANDLE);
+		pipe = !GetConsoleMode(inh, &dw);
+		if (!pipe)
+		{
+			SetConsoleMode(inh, dw & ~(ENABLE_MOUSE_INPUT | ENABLE_WINDOW_INPUT));
+			FlushConsoleInputBuffer(inh);
+		}
+	}
+
+	if (pipe)
+	{
+		if (!PeekNamedPipe(inh, NULL, 0, NULL, &dw, NULL)) return 1;
+		return dw;
+	}
+	else
+	{
+		GetNumberOfConsoleInputEvents(inh, &dw);
+		return dw <= 1 ? 0 : dw;
+	}
+}
+
+// read GUI/user input
+void read_input()
+{
+	// bytes to read holder
+	int bytes;
+
+	// GUI/user input
+	char input[256] = "", * endc;
+
+	// "listen" to STDIN
+	if (input_waiting())
+	{
+		// tell engine to stop calculating
+		stopped = true;
+
+		// loop to read bytes from STDIN
+		do
+		{
+			// read bytes from STDIN
+			bytes = _read(_fileno(stdin), input, 256);
+		}
+		while (bytes < 0);// until bytes available
+
+		// searches for the first occurrence of '\n'
+		endc = strchr(input, '\n');
+
+		// if found new line set value at pointer to 0
+		if (endc) *endc = 0;
+
+		// if input is available
+		if (strlen(input) > 0)
+		{
+			// match UCI "quit" command
+			if (!strncmp(input, "quit", 4))
+			{
+				// tell engine to terminate exacution    
+				quit = true;
+			}
+
+			// // match UCI "stop" command
+			else if (!strncmp(input, "stop", 4))
+			{
+				// tell engine to terminate exacution
+				quit = true;
+			}
+		}
+	}
+}
+
+// a bridge function to interact between search and GUI input
+static void communicate()
+{
+	// if time is up break here
+	if (time_set == 1 && get_time_ms() > stop_time)
+	{
+		// tell engine to stop calculating
+		stopped = true;
+	}
+
+	// read GUI input
+	read_input();
+}
+
+#pragma endregion
+/****************************************\
+ ========================================
 				My Search
  ========================================
 \****************************************/
@@ -2225,7 +2554,7 @@ void perft_test(int depth)
 const int piece_scores[12] = { 10, 30, 31, 50, 90, 2000, -10, -30, -31, -50, -90, -2000 };
 
 
-static inline int Mposition_evaluate(int cnt,int depth)
+static inline int Mposition_evaluate(int cnt, int depth)
 {
 
 	/*if (bitboards[K] == 0 || bitboards[k] == 0)
@@ -2240,16 +2569,16 @@ static inline int Mposition_evaluate(int cnt,int depth)
 		return 30000;
 	if (bitboards[k] == 0)
 		return -30000;*/
-	
 
 
-	
+
+
 
 	if (cnt == 0)
-	{	
+	{
 		//printf("count was zero!!!!\n");
 
-		
+
 		if (is_square_attacked(get_lsb_index(bitboards[K]), BLACK))//white king attacked by black
 		{
 			//printf("white is mate\n");
@@ -2259,7 +2588,7 @@ static inline int Mposition_evaluate(int cnt,int depth)
 
 			return -2000 * depth;
 		}
-			
+
 		if (is_square_attacked(get_lsb_index(bitboards[k]), WHITE))//black king attacked by white
 		{
 			//printf("black is mate\n");
@@ -2271,10 +2600,10 @@ static inline int Mposition_evaluate(int cnt,int depth)
 		}
 
 		//printf("stalemate\n");
-		return 0;	
+		return 0;
 
 	}
-	
+
 
 	int score = 0;
 
@@ -2290,7 +2619,7 @@ static inline int MMiniMax(int depth, bool Maximizing)
 {
 	Moves moves[1];
 	generate_moves(moves);
-	
+
 	int cnt = 0;
 	for (int i = 0; i < moves->count; i++)
 	{
@@ -2309,21 +2638,21 @@ static inline int MMiniMax(int depth, bool Maximizing)
 	}
 
 	if (depth == 0 || cnt == 0)
-		return Mposition_evaluate(cnt,depth);
+		return Mposition_evaluate(cnt, depth);
 
 	if (Maximizing)//white
 	{
 		int maxeval = INT_MIN;
-					
+
 		for (int i = 0; i < moves->count; i++)
-		{		
+		{
 			copy_board();
 
 			if (!make_move(moves->moves[i]))
 			{
 				take_back();
 				continue;
-			}			
+			}
 
 
 			int eval = MMiniMax(depth - 1, false);
@@ -2331,31 +2660,31 @@ static inline int MMiniMax(int depth, bool Maximizing)
 			take_back();
 
 
-			maxeval = std::max(maxeval, eval);		
+			maxeval = std::max(maxeval, eval);
 		}
 		return maxeval;
 	}
 	else//black
 	{
 		int mineval = INT_MAX;
-				
+
 		for (int i = 0; i < moves->count; i++)
-		{			
+		{
 			copy_board();
 
 			if (!make_move(moves->moves[i]))
 			{
 				take_back();
 				continue;
-			}			
+			}
 
 			int eval = MMiniMax(depth - 1, true);
 
 			take_back();
-		
 
-			mineval = std::min(mineval, eval);		
-		}	
+
+			mineval = std::min(mineval, eval);
+		}
 		return mineval;
 	}
 }
@@ -2436,7 +2765,7 @@ int Mget_best_move(int depth)
 	std::vector<int> bestmoves;
 
 	printf("\nCount: %d\n", (moves->count));
-	
+
 	if (side == WHITE)
 	{
 		int bestScore = INT_MIN;
@@ -2450,15 +2779,15 @@ int Mget_best_move(int depth)
 				take_back();
 				continue;
 			}
-			
+
 			int eval = MMiniMax(depth - 1, false);
-			printf("no%d  score: %d  move:",(i+1), eval);
+			printf("no%d  score: %d  move:", (i + 1), eval);
 			print_move(moves->moves[i]);
 			printf("\n");
 
 			take_back();
 
-			
+
 			if (eval >= bestScore)
 			{
 				if (eval == bestScore)
@@ -2469,16 +2798,16 @@ int Mget_best_move(int depth)
 					bestmoves.clear();
 					bestmoves.push_back(moves->moves[i]);
 					bestScore = eval;
-				}													
+				}
 			}
-		}					
+		}
 	}
 	else
 	{
 		int bestScore = INT_MAX;
 
 		for (int i = 0; i < moves->count; i++)//paralize this
-		{		
+		{
 			copy_board();
 
 			if (!make_move(moves->moves[i]))
@@ -2507,9 +2836,9 @@ int Mget_best_move(int depth)
 					bestmoves.clear();
 					bestmoves.push_back(moves->moves[i]);
 					bestScore = eval;
-				}		
+				}
 			}
-		}		
+		}
 	}
 	//printf("size: %d\n", bestmoves.size());
 
@@ -2688,19 +3017,19 @@ static inline int evaluate()
 			switch (piece)
 			{
 				//white
-				case P: score += pawn_score[square]; break;
-				case N: score += knight_score[square]; break;
-				case B: score += bishop_score[square]; break;
-				case R: score += rook_score[square]; break;			
-				case K: score += king_score[square]; break;
+			case P: score += pawn_score[square]; break;
+			case N: score += knight_score[square]; break;
+			case B: score += bishop_score[square]; break;
+			case R: score += rook_score[square]; break;
+			case K: score += king_score[square]; break;
 				//black
-				case p: score -= pawn_score[mirror_score[square]]; break;
-				case n: score -= knight_score[mirror_score[square]]; break;
-				case b: score -= bishop_score[mirror_score[square]]; break;
-				case r: score -= rook_score[mirror_score[square]]; break;
-				case k: score -= king_score[mirror_score[square]]; break;
+			case p: score -= pawn_score[mirror_score[square]]; break;
+			case n: score -= knight_score[mirror_score[square]]; break;
+			case b: score -= bishop_score[mirror_score[square]]; break;
+			case r: score -= rook_score[mirror_score[square]]; break;
+			case k: score -= king_score[mirror_score[square]]; break;
 
-				default: break;
+			default: break;
 			}
 
 
@@ -2758,6 +3087,8 @@ static int mvv_lva[12][12] = {
 
 //max reachable ply
 #define MAX_PLY 64
+//interval for when to communicate with gui
+#define LISTEN 16383 //32767 //2047
 
 //killer moves [id][ply]
 int killer_moves[2][MAX_PLY] = {};
@@ -2826,7 +3157,7 @@ static inline void enable_pv_scoring(Moves* move_list)
 * ===================
 *    Move ordering
 * ===================
-* 
+*
 * 1 PV move
 * 2 Captures and MVA/LVA
 * 3 1st killer move
@@ -2836,7 +3167,7 @@ static inline void enable_pv_scoring(Moves* move_list)
 */
 
 static inline int score_move(int move)
-{	
+{
 	//if PV scoring allowed
 	if (score_pv)
 	{
@@ -2845,9 +3176,9 @@ static inline int score_move(int move)
 			//disable flag
 			score_pv = FALSE;
 
-			printf("PV move: ");
-			print_move(move);
-			printf(" ply: %d\n", ply);
+			//printf("PV move: ");
+			//print_move(move);
+			//printf(" ply: %d\n", ply);
 
 			//score PV move to search first
 			return 20000;
@@ -2856,7 +3187,7 @@ static inline int score_move(int move)
 
 
 	if (get_move_capture(move))
-	{		
+	{
 		int target_piece = P;
 
 		int start_piece, end_piece;
@@ -2876,10 +3207,10 @@ static inline int score_move(int move)
 			{
 				target_piece = bb_piece;
 				break;
-			}	
+			}
 		}
 		//score capture
-		return mvv_lva[get_move_piece(move)][target_piece] + 10000;		
+		return mvv_lva[get_move_piece(move)][target_piece] + 10000;
 	}
 	else//score quiet move
 	{
@@ -2898,8 +3229,8 @@ static inline int score_move(int move)
 }
 
 static inline void sort_moves(Moves* move_list)
-{	
-	for (int i = 0; i < move_list->count; i++)	
+{
+	for (int i = 0; i < move_list->count; i++)
 		move_scores[i] = score_move(move_list->moves[i]);
 
 	//bubble sort
@@ -2908,7 +3239,7 @@ static inline void sort_moves(Moves* move_list)
 		for (int j = i + 1; j < move_list->count; j++)
 		{
 			if (move_scores[i] < move_scores[j])
-			{			
+			{
 				//swap scores
 				std::swap(move_scores[i], move_scores[j]);
 				//swap moves
@@ -2920,15 +3251,19 @@ static inline void sort_moves(Moves* move_list)
 
 //alpha = maximizing
 //beta = minimizing
-static inline int quiescence(int alpha,int beta)
+static inline int quiescence(int alpha, int beta)
 {
+	//every time to listen to gui / user
+	if ((nodes & LISTEN) == 0)
+		communicate();
+
 	nodes++;
 
 	int eval = evaluate();
 
 
 	//fails high
-	if (eval >= beta) 
+	if (eval >= beta)
 		return beta;
 	//better move
 	if (eval > alpha)
@@ -2951,23 +3286,24 @@ static inline int quiescence(int alpha,int beta)
 
 		copy_board();
 
-		ply++;	
+		ply++;
 
 		if (!make_move(moves->moves[i]))
 		{
 			take_back();
-			
+
 			ply--;
 			continue;
 		}
-		
-		
+
+
 		int score = -quiescence(-beta, -alpha);
-					
+
 		ply--;
 		take_back();
+		//return if time is up
+		if (stopped) return 0;
 
-		
 
 		//fails high
 		if (score >= beta)
@@ -2977,7 +3313,7 @@ static inline int quiescence(int alpha,int beta)
 		{
 			//PV node (Prinsipal variation)
 			alpha = score;
-		
+
 		}
 	}
 	//fails low
@@ -2989,15 +3325,17 @@ const int full_depth_moves = 4;
 const int reduction_limit = 3;
 
 static inline int negamax(int alpha, int beta, int depth)
-{	
-	bool found_pv = false;
+{
+	//every time to listen to gui / user
+	if ((nodes & LISTEN) == 0)
+		communicate();
 
 	pv_length[ply] = ply;
 
 	if (depth == 0)
 		//run quisuince
 		return quiescence(alpha, beta);
-	
+
 	//make sure no overflow on arrays
 	if (ply > MAX_PLY - 1)
 	{
@@ -3009,8 +3347,8 @@ static inline int negamax(int alpha, int beta, int depth)
 	nodes++;
 
 	int in_check = is_square_attacked(
-	(side == WHITE ? get_lsb_index(bitboards[K]) :
-					 get_lsb_index(bitboards[k])),	side ^ 1);
+		(side == WHITE ? get_lsb_index(bitboards[K]) :
+			get_lsb_index(bitboards[k])), side ^ 1);
 
 
 	if (in_check) depth++;//search further when in check
@@ -3019,6 +3357,29 @@ static inline int negamax(int alpha, int beta, int depth)
 	int legal_count = 0;
 
 
+	//Null move pruning
+	if (depth >= 3 && !in_check && ply)
+	{
+		copy_board();
+
+		//switch side: giving opponent extra move
+		side ^= 1;
+
+		//reset enpassant
+		enpassant = NO_SQ;
+
+		//search with reduced depth (depth - 1 - r  where r = reduction_limit)
+		int score = -negamax(-beta, -beta + 1, depth - 1 - 2);
+
+		take_back();
+		//return if time is up
+		if (stopped) return 0;
+
+		//fail hard cutoff
+		if (score >= beta)
+			return beta;//fail high
+
+	}
 
 	Moves moves[1];
 	generate_moves(moves);
@@ -3048,65 +3409,53 @@ static inline int negamax(int alpha, int beta, int depth)
 
 		int score = 0;
 
-		//on PV node hit
-		if (found_pv)
+
+		//LMR
+
+		//full depth search
+		if (moves_searched == 0)
+			score = -negamax(-beta, -alpha, depth - 1);
+		else//late move reduction LMR
 		{
-			score = -negamax(-alpha - 1, -alpha, depth - 1);
-
-			if ((score > alpha) && (score < beta))//check on failure
+			//condition for LMR
+			if (
+				moves_searched >= full_depth_moves &&
+				depth >= reduction_limit &&
+				!in_check &&
+				!get_move_capture(moves->moves[i]) &&
+				!get_move_promoted(moves->moves[i])
+				)
 			{
-				//re search move
-				score = -negamax(-beta, -alpha, depth - 1);
+				//search current move with reduced depth
+				score = -negamax(-alpha - 1, -alpha, depth - 2);
+			}
+			else
+			{
+				//hack to ensure full depth search
+				score = alpha + 1;
+			}
+			//principle variation search PVS
+			if (score > alpha)
+			{
+				score = -negamax(-alpha - 1, -alpha, depth - 1);
+
+				//if LMR fails re-search at full depth
+				if (score > alpha && score < beta)
+					score = -negamax(-beta, -alpha, depth - 1);
 			}
 
 		}
-		else//normal alpha beta
-		{	
-			//LMR
 
-			//full depth search
-			if(moves_searched == 0)
-				score = -negamax(-beta, -alpha, depth - 1);
-			else//late move reduction LMR
-			{
-				//condition for LMR
-				if (
-					moves_searched >= full_depth_moves &&
-					depth >= reduction_limit &&
-					!in_check &&
-					!get_move_capture(moves->moves[i]) &&
-					!get_move_promoted(moves->moves[i])
-					)
-				{
-					//search current move with reduced depth
-					score = -negamax(-alpha - 1, -alpha, depth - 2);
-				}
-				else
-				{
-					//hack to ensure full depth search
-					score = alpha + 1;
-				}
-				//found better move
-				if (score > alpha)
-				{
-					score = -negamax(-(alpha + 1), -alpha, depth - 1);
-
-					//if LMR fails re-search at full depth
-					if (score > alpha && score < beta)
-						score = -negamax(-beta, -alpha, depth - 1);
-				}
-		
-			}
-
-		}
 
 		ply--;
 		take_back();
+		//return if time is up
+		if (stopped) return 0;
 
 		moves_searched++;
 
 		//fails high
-		if (score >= beta) 
+		if (score >= beta)
 		{
 			//192700
 
@@ -3118,7 +3467,7 @@ static inline int negamax(int alpha, int beta, int depth)
 				killer_moves[0][ply] = moves->moves[i];
 			}
 
-			return beta; 
+			return beta;
 		}
 		//better move
 		if (score > alpha)
@@ -3133,9 +3482,6 @@ static inline int negamax(int alpha, int beta, int depth)
 			//PV node (Prinsipal variation)
 			alpha = score;
 
-			//enable found PV flag
-			found_pv = true;
-
 			//write PV move
 			pv_table[ply][ply] = moves->moves[i];
 
@@ -3149,7 +3495,7 @@ static inline int negamax(int alpha, int beta, int depth)
 
 			//adjust pv length
 			pv_length[ply] = pv_length[ply + 1];
-		
+
 		}
 	}
 	//no legal moves
@@ -3165,14 +3511,16 @@ static inline int negamax(int alpha, int beta, int depth)
 	return alpha;
 }
 
-
 void search_position(int depth)
 {
+	int previous_best = 0;
 	int score = 0;
 
 	//nodes = running total
 	nodes = 0ULL;
-	
+
+	//reset stop flag
+	stopped = false;
 
 	//reset flags
 	follow_pv = FALSE;
@@ -3184,6 +3532,9 @@ void search_position(int depth)
 	memset(pv_table, 0, sizeof(pv_table));
 	memset(pv_length, 0, sizeof(pv_length));
 
+	//1281490
+	 //770190
+
 	//845015
 	// 
 	//depth 6 tricky position
@@ -3192,23 +3543,35 @@ void search_position(int depth)
 	//new best:  824253
 	//new best:  363479
 
+	int alpha = -Infinty;
+	int beta = Infinty;
+
 	//iterative deepening
 	for (int current_depth = 1; current_depth <= depth; current_depth++)
-	{	
-		//nodes = 0ULL;//remove later
-
+	{
 		//enable pv
 		follow_pv = TRUE;
 
-
 		//search best
-		score = negamax(-Infinty, Infinty, current_depth);
+		score = negamax(alpha, beta, current_depth);
 
-		//printf("score %d",score);
+		//we fell outside the window, try again with full window (and same depth)
+		if ((score <= alpha) || (score >= beta))
+		{
+			alpha = -Infinty;
+			beta = Infinty;
+			continue;
+		}
+		//set up the window for the next itteration
+		alpha = score - 50;
+		beta = score + 50;
 
-		//best_move = Mget_best_move(depth);
 
+		//get best move so far if time is up
+		if (stopped) break;
+		previous_best = pv_table[0][0];
 
+		
 		printf("info score cp %d depth %d nodes %llu pv ", score, current_depth, nodes);
 
 		//loop over pv line
@@ -3217,12 +3580,16 @@ void search_position(int depth)
 			print_move(pv_table[0][i]);
 			printf(" ");
 		}
-		printf("\n");
-
+		printf("\n");			
 	}
 
 	printf("bestmove ");
-	print_move(pv_table[0][0]);
+	//if the search was stopped and we have a previous best move
+	if (stopped && previous_best)
+		print_move(previous_best);
+	//else if the search was not stopped or we dont have a previous best move return current
+	else
+		print_move(pv_table[0][0]);
 	printf("\n");
 }
 
@@ -3238,7 +3605,7 @@ void search_position(int depth)
 int parse_move(const char* move_string)
 {
 	int length = strlen(move_string);
-	if(length < 4)
+	if (length < 4)
 		throw std::invalid_argument("move string too short!");
 
 	Moves move_list[1];
@@ -3246,7 +3613,7 @@ int parse_move(const char* move_string)
 	generate_moves(move_list);
 
 	//parse source        //x                      //y
-	int source_square = (move_string[0] - 'a') + (8 - (move_string[1] - '0')) * 8 ;
+	int source_square = (move_string[0] - 'a') + (8 - (move_string[1] - '0')) * 8;
 	//parse target        //x                      //y
 	int target_square = (move_string[2] - 'a') + (8 - (move_string[3] - '0')) * 8;
 
@@ -3301,7 +3668,7 @@ void parse_position(const char* command)
 	else//command == fen
 	{
 		//make sure fen is in string
-		          
+
 		//finds substring fen
 		current = strstr(command, "fen");
 
@@ -3310,7 +3677,7 @@ void parse_position(const char* command)
 		else//found
 		{
 			current += 4;
-		
+
 			parse_fen(current);
 		}
 		//printf("1:%s\n", command);
@@ -3345,29 +3712,116 @@ void parse_position(const char* command)
 		}
 		//printf("Cur:%s\n", current);
 	}
-	print_board(true);
+	//print_board(true);
 }
 
+static inline int get_piece_count()
+{
+	int cnt = 0;
+
+	for (int i = 0; i < 12; i++)
+		cnt += count_bits(bitboards[i]);
+
+	return cnt;
+}
+
+
+//                pieces left   0, 1, 2, 3, 4, 5, 6, 7,  8,  9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32
+const int moves_by_pieces[] = { 0, 1, 3, 4, 5, 6, 8, 9, 10, 11, 13, 14, 15, 16, 18, 19, 20, 21, 23, 24, 25, 26, 28, 29, 30, 31, 33, 34, 35, 36, 38, 39, 40, 41, 43, 44, 45, 46, 48, 49, 50, 51, 53, 54, 55, 56, 58, 59, 60, 61, 63, 64, 65, 66, 68, 69, 70, 71, 73, 74, 75, 76, 78, 79, 80 };
+
+// parse UCI command "go"
 void parse_go(const char* command)
 {
-	int depth = -1;
+	// init parameters
 
-	const char* current_depth = NULL;
+	//int moves_to_go = 30;
 
-	//fixed depth search
-	//set curr_depth to the pntr before depth
-	if (current_depth = strstr(command, "depth"))
+	int moves_to_go = moves_by_pieces[get_piece_count()];
+	
+	int depth = 0, inc = 0;
+	U64 time = 0ULL, move_time = 0ULL;
+	const char* argument = NULL;
+
+	time_set = false;
+
+	// infinite search
+	if ((argument = strstr(command, "infinite"))) {}
+
+	// match UCI "binc" command
+	if ((argument = strstr(command, "binc")) && side == BLACK)
+		// parse black time increment
+		inc = atoi(argument + 5);
+
+	// match UCI "winc" command
+	if ((argument = strstr(command, "winc")) && side == WHITE)
+		// parse white time increment
+		inc = atoi(argument + 5);
+
+	// match UCI "wtime" command
+	if ((argument = strstr(command, "wtime")) && side == WHITE)
+		// parse white time limit
+		time = atoi(argument + 6);
+
+	// match UCI "btime" command
+	if ((argument = strstr(command, "btime")) && side == BLACK)
+		// parse black time limit
+		time = atoi(argument + 6);
+
+	// match UCI "movestogo" command
+	if ((argument = strstr(command, "movestogo")))
+		// parse number of moves to go
+		moves_to_go = atoi(argument + 10);
+
+	// match UCI "movetime" command
+	if ((argument = strstr(command, "movetime")))
+		// parse amount of time allowed to spend to make a move
+		move_time = atoi(argument + 9);
+
+	// match UCI "depth" command
+	if ((argument = strstr(command, "depth")))
+		// parse search depth
+		depth = atoi(argument + 6);
+
+	// if move time is not available
+	if (move_time != 0)
 	{
-		//converts string to int - skip token & space after
-		depth = atoi(current_depth + 6);
+		// set time equal to move time
+		time = move_time;
+
+		// set moves to go to 1
+		moves_to_go = 1;
 	}
-	else//handle time controls
+
+	// init start time
+	start_time = get_time_ms();
+
+	// if time control is available
+	if (time != 0)
 	{
-		depth = 4;
+		// flag we're playing with time control
+		time_set = true;
+
+		// set up timing
+		time /= moves_to_go;
+
+		if (time > 100) time -= 30;
+		else if (time > 50) time -= 25;
+		else if (time > 25) time -= 17;
+		else if (time > 15) time -= 10;
+
+		stop_time = start_time + time + inc;
 	}
 
-	//printf("depth:%d\n", depth);
+	// if depth is not available
+	if (depth == 0)
+		// set depth to 64 plies (takes ages to complete...)
+		depth = MAX_PLY;
 
+	// print debug info
+	printf("Time:%llu Start:%llu Stop:%llu Depth:%d Time-set:%s MovesToGo:%d \n",
+		time, start_time, stop_time, depth, (time_set ? "True" : "False"),moves_to_go);
+
+	// search position
 	search_position(depth);
 }
 
@@ -3376,11 +3830,10 @@ void parse_go(const char* command)
 * GUI -> isready
 * Engine -> readyok
 * GUI -> ucinewgame
-* 
+*
 */
 
 //main uci loop
-
 
 void uci_loop()
 {
@@ -3402,7 +3855,7 @@ void uci_loop()
 	printf("uciok\n");
 
 	//uci loop
-	while(1)
+	while (1)
 	{
 		//reset input
 		memset(input, 0, sizeof(input));
@@ -3411,8 +3864,8 @@ void uci_loop()
 		fflush(stdout);
 
 		//skip loop cycle while nothing in stdin else populate input
-		if (!fgets(input, size, stdin)) continue;	
-	
+		if (!fgets(input, size, stdin)) continue;
+
 		//skip newline
 		if (input[0] == '\n') continue;
 
@@ -3457,25 +3910,54 @@ void uci_loop()
  ========================================
 \****************************************/
 
+
 int main()
 {   //use %ls for wchar
-	
-	init_all();	
-	
-	
+
+
+	//"r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 "
+	// 
+	//r3k2r/pppbbppp/2n2q1P/1P2p3/3pn3/BN2PNP1/P1PPQPB1/R3K2R w KQkq -
+
+
+	init_all();
+
 	int debug = 1;
 
 	if (debug)
 	{
-		//tricky_position
-
 		parse_fen(tricky_position);
+
+		//parse_fen(tricky_position);
+		//parse_fen(start_position);
+
 		print_board();
-		search_position(6);
+
+
+		//printf("hash key: %llx\n",generate_hash_key());
+
+
+		/*U64 key = 123456789101112ULL;
+		printf("key initial: %llx\n", key);
+
+		key ^= piece_keys[P][a2];
+
+		printf("key: %llx\n", key);
+
+		key ^= piece_keys[P][a2];
+
+		printf("key: %llx\n", key);*/
+
+
+
+
+		//std::cout << get_piece_count();
+
+		//search_position(7);
 
 		//Moves moves[1];	
 		//generate_moves(moves);
-	
+
 		//killer
 		//killer_moves[0][ply] = moves->moves[3];
 
@@ -3484,21 +3966,18 @@ int main()
 
 		//print_moves_scores(moves);
 
-	    //sort_moves(moves);
+		//sort_moves(moves);
 		//printf("\n\n");
 		//print_moves_scores(moves);
 
 	}
 	else
 		uci_loop();
-	
+
 
 	//std::wcin.get();
 	return 0;
 }
-
-
-
 
 //void Test1(int size)
 //{
