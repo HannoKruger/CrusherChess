@@ -4,7 +4,7 @@
 #pragma once
 
 #define NOMINMAX
-#define Infinty 0x7FFFFFFF
+#define Infinity 50000
 
 #include <stack>
 #include <iostream>
@@ -20,6 +20,7 @@
 //#include <Windows.h>
 #include <consoleapi2.h>
 #include <assert.h>
+#include <set>
 
 class TextAttr
 {
@@ -100,6 +101,7 @@ static inline U64 get_rook_attacks(int square, U64 occupancy);
 static inline bool is_square_attacked(int square, int side);
 
 static inline int score_move(int move);
+void clear_hash_table();
 
 //void search_position(int depth);
 #pragma endregion
@@ -1274,7 +1276,8 @@ void init_all()
 	init_leapers_attacks();
 	init_sliders_attacks(BISHOP);
 	init_sliders_attacks(ROOK);
-	init_random_keys();
+	init_random_keys();	
+	clear_hash_table();
 
 	parse_fen(start_position);
 }
@@ -2367,6 +2370,9 @@ static inline int make_move(int move)
 \****************************************/
 #pragma region
 
+//std::set<U64> keys;
+//std::vector<U64> collisions;
+
 
 //leaf nodes (number of positions reached at given depth
 U64 nodes = 0ULL;
@@ -2395,6 +2401,20 @@ static inline void perft_driver(int depth)
 			take_back();
 			continue;
 		}
+
+		//auto t = keys.insert(hash_key);
+
+		//if (t.second)
+		//{
+			//does not exist in set
+		//}
+		//else
+		//{
+			//collisions.push_back(hash_key);
+			//std::cout << "Collision! " << "length:" << keys.size() << std::endl;
+
+			//print_board();
+		//}
 
 		// call perft driver recursively
 		perft_driver(depth - 1);
@@ -2426,6 +2446,22 @@ void perft_test(int depth)
 				take_back();
 				continue;
 			}
+
+			//auto t = keys.insert(hash_key);
+
+			//if (t.second)
+			//{
+				//does not exist in set
+			//}
+			//else
+			//{
+				//std::cout << "Collision! " << "length:" << keys.size() << std::endl;
+			//	collisions.push_back(hash_key);
+
+				//print_board();
+			//}
+
+
 
 			U64 cumulative_nodes = nodes;
 
@@ -3092,6 +3128,97 @@ static inline int evaluate()
 #pragma endregion
 /****************************************\
  ========================================
+		 Transposition Table
+ ========================================
+\****************************************/
+#pragma region
+
+// hash table size (4mb)
+#define tt_size 0x400000
+
+#define no_hash_entry Infinity * 2
+
+// transposition table hash flags
+#define hash_flag_exact 0
+#define hash_flag_alpha 1
+#define hash_flag_beta 2
+
+// transposition table data structure
+typedef struct TT
+{
+	U64 key;   // "almost" unique chess position identifier
+	int depth;      // current search depth
+	int flag;       // flag the type of node (fail-low/fail-high/PV) 
+	int score;      // score (alpha/beta/PV)
+} TT;               // transposition table (TT aka hash table)
+
+// define TT instance
+TT hash_table[tt_size];
+
+// clear TT (hash table)
+void clear_hash_table()
+{
+	//// loop over TT elements
+	//for (int index = 0; index < hash_size; index++)
+	//{
+	//	// reset TT inner fields
+	//	hash_table[index].key = 0;
+	//	hash_table[index].depth = 0;
+	//	hash_table[index].flag = 0;
+	//	hash_table[index].score = 0;
+	//}
+
+	//this propably wont work for dynamic array
+	memset(hash_table, 0, sizeof(hash_table));
+
+	assert(hash_table[0].depth == 0);
+	assert(hash_table[0].flag == 0);
+	assert(hash_table[0].key == 0);
+	assert(hash_table[0].score == 0);
+}
+
+static inline int read_hash_entry(int alpha,int beta,int depth)
+{
+	//bring hash key down to table index storing the score data for current board position if available
+	TT* hash_entry = &hash_table[hash_key % tt_size];
+
+	//make sure we're dealing with correct position
+	if (hash_entry->key == hash_key)
+	{
+		//make sure to match depth our search is at
+		if (hash_entry->depth >= depth)
+		{
+			//match the exact score (PV node)
+			if (hash_entry->flag == hash_flag_exact)					
+				return hash_entry->score;		
+			//match alpha score (fail low node)
+			if (hash_entry->flag == hash_flag_alpha && hash_entry->score <= alpha)	
+				return alpha;
+			//match beta score (fail high node)
+			if (hash_entry->flag == hash_flag_beta && hash_entry->score >= beta)		
+				return beta;
+			
+		}
+	}
+	//entry doesnt exist
+	return no_hash_entry;
+}
+
+static inline void write_hash_entry(int score, int depth, int hash_flag)
+{
+	//bring hash key down to table index storing the score data for current board position if available
+	TT* hash_entry = &hash_table[hash_key % tt_size];
+	//write hash entry data
+	hash_entry->key = hash_key;
+	hash_entry->score = score;
+	hash_entry->flag = hash_flag;
+    hash_entry->depth = depth;
+}
+
+
+#pragma endregion
+/****************************************\
+ ========================================
 				Search
  ========================================
 \****************************************/
@@ -3301,6 +3428,13 @@ static inline int quiescence(int alpha, int beta)
 
 	nodes++;
 
+	//make sure no overflow on arrays
+	if (ply > MAX_PLY - 1)
+	{
+		assert(!"ply greater than max ply");
+		return evaluate();
+	}
+
 	int eval = evaluate();
 
 
@@ -3345,17 +3479,16 @@ static inline int quiescence(int alpha, int beta)
 		take_back();
 		//return if time is up
 		if (stopped) return 0;
-
-
-		//fails high
-		if (score >= beta)
-			return beta;
+	
 		//better move
 		if (score > alpha)
 		{
 			//PV node (Prinsipal variation)
 			alpha = score;
 
+			//fails high
+			if (score >= beta)
+				return beta;
 		}
 	}
 	//fails low
@@ -3366,8 +3499,19 @@ static inline int quiescence(int alpha, int beta)
 const int full_depth_moves = 4;
 const int reduction_limit = 3;
 
+//main search
 static inline int negamax(int alpha, int beta, int depth)
 {
+	//current move score
+	int score;
+	int hash_flag = hash_flag_alpha;
+
+	//if move already searched return move score without further search
+	//also make sure we are noot in the root ply
+	if (ply && (score = read_hash_entry(alpha, beta, depth)) != no_hash_entry)	
+		return score;
+	
+
 	//every time to listen to gui / user
 	if ((nodes & LISTEN) == 0)
 		communicate();
@@ -3404,16 +3548,29 @@ static inline int negamax(int alpha, int beta, int depth)
 	{
 		copy_board();
 
-		//switch side: giving opponent extra move
-		side ^= 1;
+		//increment ply
+		ply++;
+
+		//hash enpassant if available
+		if (enpassant != NO_SQ) hash_key ^= enpassant_keys[enpassant];
 
 		//reset enpassant
 		enpassant = NO_SQ;
 
+		//switch side: giving opponent extra move
+		side ^= 1;
+
+		//hash side
+		hash_key ^= side_key;
+		
 		//search with reduced depth (depth - 1 - r  where r = reduction_limit)
-		int score = -negamax(-beta, -beta + 1, depth - 1 - 2);
+		score = -negamax(-beta, -beta + 1, depth - 1 - 2);
+
+		//revert ply
+		ply--;
 
 		take_back();
+
 		//return if time is up
 		if (stopped) return 0;
 
@@ -3449,9 +3606,7 @@ static inline int negamax(int alpha, int beta, int depth)
 		legal_count++;
 
 
-		int score = 0;
-
-
+		
 		//LMR
 
 		//full depth search
@@ -3488,32 +3643,20 @@ static inline int negamax(int alpha, int beta, int depth)
 
 		}
 
-
 		ply--;
 		take_back();
 		//return if time is up
 		if (stopped) return 0;
 
 		moves_searched++;
-
-		//fails high
-		if (score >= beta)
-		{
-			//192700
-
-			//only quite moves
-			if (!get_move_capture(moves->moves[i]))
-			{
-				//store killer
-				killer_moves[1][ply] = killer_moves[0][ply];
-				killer_moves[0][ply] = moves->moves[i];
-			}
-
-			return beta;
-		}
+		
 		//better move
 		if (score > alpha)
 		{
+			//switch hash flag from fail low to one for PV node
+			hash_flag = hash_flag_exact;
+
+
 			//only quite moves
 			if (!get_move_capture(moves->moves[i]))
 			{
@@ -3538,6 +3681,23 @@ static inline int negamax(int alpha, int beta, int depth)
 			//adjust pv length
 			pv_length[ply] = pv_length[ply + 1];
 
+
+			//fails high (hard)
+			if (score >= beta)
+			{
+				//store hash entry with score equal to beta
+				write_hash_entry(beta, depth, hash_flag_beta);
+
+				//only quite moves
+				if (!get_move_capture(moves->moves[i]))
+				{
+					//store killer
+					killer_moves[1][ply] = killer_moves[0][ply];
+					killer_moves[0][ply] = moves->moves[i];
+				}
+
+				return beta;
+			}
 		}
 	}
 	//no legal moves
@@ -3548,6 +3708,9 @@ static inline int negamax(int alpha, int beta, int depth)
 		else//stalemate
 			return 0;
 	}
+
+	//store hash entry with the score equal to alpha
+	write_hash_entry(alpha , depth, hash_flag);
 
 	//fails low
 	return alpha;
@@ -3574,6 +3737,7 @@ void search_position(int depth)
 	memset(pv_table, 0, sizeof(pv_table));
 	memset(pv_length, 0, sizeof(pv_length));
 
+
 	//1281490
 	 //770190
 
@@ -3585,8 +3749,8 @@ void search_position(int depth)
 	//new best:  824253
 	//new best:  363479
 
-	int alpha = -Infinty;
-	int beta = Infinty;
+	int alpha = -Infinity;
+	int beta = Infinity;
 
 	//iterative deepening
 	for (int current_depth = 1; current_depth <= depth; current_depth++)
@@ -3600,8 +3764,8 @@ void search_position(int depth)
 		//we fell outside the window, try again with full window (and same depth)
 		if ((score <= alpha) || (score >= beta))
 		{
-			alpha = -Infinty;
-			beta = Infinty;
+			alpha = -Infinity;
+			beta = Infinity;
 			continue;
 		}
 		//set up the window for the next itteration
@@ -3614,7 +3778,8 @@ void search_position(int depth)
 		previous_best = pv_table[0][0];
 
 		
-		printf("info score cp %d depth %d nodes %llu pv ", score, current_depth, nodes);
+		//printf("info score cp %d depth %d nodes %llu pv ", score, current_depth, nodes);
+		printf("info score cp %d depth %d nodes %llu time %llu pv ", score, current_depth, nodes, (get_time_ms() - start_time));
 
 		//loop over pv line
 		for (int i = 0; i < pv_length[0]; i++)
@@ -3922,7 +4087,11 @@ void uci_loop()
 			parse_position(input);
 		//UCI new game
 		else if (strncmp(input, "ucinewgame", 10) == 0)
+		{
 			parse_position("position startpos");
+			
+			clear_hash_table();
+		}
 		//UCI go
 		else if (strncmp(input, "go", 2) == 0)
 			parse_go(input);
@@ -3953,64 +4122,31 @@ void uci_loop()
 \****************************************/
 
 
+void test_hash_collisions()
+{
+	
+}
+
+//time
+
 int main()
 {   //use %ls for wchar
 
-
-	//"r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 "
-	// 
-	//r3k2r/pppbbppp/2n2q1P/1P2p3/3pn3/BN2PNP1/P1PPQPB1/R3K2R w KQkq -
-
-
 	init_all();
 
-	int debug = 1;
+	int debug = 0;
 
 	if (debug)
 	{
-		parse_fen(tricky_position);
-
-		//parse_fen(tricky_position);
-		//parse_fen(start_position);
-
+		parse_fen(start_position);
+	
 		print_board();
+	
+		search_position(10);
 
-		//printf("hash key: %llx\n",generate_hash_key());
+		make_move(pv_table[0][0]);
 
-
-		/*U64 key = 123456789101112ULL;
-		printf("key initial: %llx\n", key);
-
-		key ^= piece_keys[P][a2];
-
-		printf("key: %llx\n", key);
-
-		key ^= piece_keys[P][a2];
-
-		printf("key: %llx\n", key);*/
-
-
-
-
-		//std::cout << get_piece_count();
-
-		//search_position(7);
-
-		//Moves moves[1];	
-		//generate_moves(moves);
-
-		//killer
-		//killer_moves[0][ply] = moves->moves[3];
-
-		//history
-
-
-		//print_moves_scores(moves);
-
-		//sort_moves(moves);
-		//printf("\n\n");
-		//print_moves_scores(moves);
-
+		search_position(10);
 	}
 	else
 		uci_loop();
