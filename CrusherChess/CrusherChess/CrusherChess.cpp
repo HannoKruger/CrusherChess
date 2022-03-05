@@ -4,7 +4,6 @@
 #pragma once
 
 #define NOMINMAX
-#define Infinity 50000
 
 #include <stack>
 #include <iostream>
@@ -518,6 +517,11 @@ int castle = 0;
 //"almost" unique position identifier aka hash key
 U64 hash_key = 0ULL;
 
+U64 repetition_table[1000] = {};//number of plies in whole game
+int repetition_index = 0;
+//half move counter
+int ply = 0;
+
 
 //leaper attacks
 U64 pawn_attacks[COLOR_NB][SQUARE_NB] = {};
@@ -848,7 +852,15 @@ void parse_fen(const char* fen)
 	memset(bitboards, 0ULL, sizeof(bitboards));
 	memset(occupancies, 0ULL, sizeof(occupancies));
 
-	castle = 0;
+	castle = 0;		
+	repetition_index = 0;
+
+	//ply and should be zero here
+	assert(ply == 0);
+	
+	//maby not nessecary?
+	memset(repetition_table, 0, sizeof(repetition_table));
+
 
 	for (int rank = 0; rank < 8; rank++)
 	{
@@ -2510,11 +2522,6 @@ bool stopped = false;//when time is up
 U64 start_time = 0ULL;//uci starttime command
 U64 stop_time = 0ULL;//uci stoptime command
 
-// get time in milliseconds
-U64 get_time_ms()
-{
-	return GetTickCount64();
-}
 
 /*
   Function to "listen" to GUI's input during search.
@@ -2611,7 +2618,7 @@ void read_input()
 static void communicate()
 {
 	// if time is up break here
-	if (time_set == 1 && get_time_ms() > stop_time)
+	if (time_set == 1 && GetTickCount64() > stop_time)
 	{
 		// tell engine to stop calculating
 		stopped = true;
@@ -3133,15 +3140,23 @@ static inline int evaluate()
 \****************************************/
 #pragma region
 
+//score layout
+//[-inf...-mate_value...-mate_score...normal(non mate)score...mate_score...mate_value...inf]
+
+#define infinity 50000
+#define mate_value 49000
+#define mate_score 48000
+
 // hash table size (4mb)
 #define tt_size 0x400000
 
-#define no_hash_entry Infinity * 2
+#define no_hash_entry infinity * 2
 
 // transposition table hash flags
 #define hash_flag_exact 0
 #define hash_flag_alpha 1
 #define hash_flag_beta 2
+
 
 // transposition table data structure
 typedef struct TT
@@ -3188,14 +3203,21 @@ static inline int read_hash_entry(int alpha,int beta,int depth)
 		//make sure to match depth our search is at
 		if (hash_entry->depth >= depth)
 		{
+			int score = hash_entry->score;
+
+			//retrieve score independant from actual path
+			//from root position to current position
+			if (score <= -mate_score) score += ply;
+			if (score >= mate_score) score -= ply;
+
 			//match the exact score (PV node)
 			if (hash_entry->flag == hash_flag_exact)					
-				return hash_entry->score;		
+				return score;		
 			//match alpha score (fail low node)
-			if (hash_entry->flag == hash_flag_alpha && hash_entry->score <= alpha)	
+			if (hash_entry->flag == hash_flag_alpha && score <= alpha)	
 				return alpha;
 			//match beta score (fail high node)
-			if (hash_entry->flag == hash_flag_beta && hash_entry->score >= beta)		
+			if (hash_entry->flag == hash_flag_beta && score >= beta)		
 				return beta;
 			
 		}
@@ -3208,13 +3230,19 @@ static inline void write_hash_entry(int score, int depth, int hash_flag)
 {
 	//bring hash key down to table index storing the score data for current board position if available
 	TT* hash_entry = &hash_table[hash_key % tt_size];
+
+	//adjust score to find mate in shortest path
+	//store score independant from actual path
+	//from root position to current position
+	if (score <= -mate_score) score -= ply;
+	if (score >= mate_score) score += ply;
+
 	//write hash entry data
 	hash_entry->key = hash_key;
 	hash_entry->score = score;
 	hash_entry->flag = hash_flag;
     hash_entry->depth = depth;
 }
-
 
 #pragma endregion
 /****************************************\
@@ -3254,10 +3282,12 @@ static int mvv_lva[12][12] = {
 	100, 200, 300, 400, 500, 600,  100, 200, 300, 400, 500, 600
 };
 
+
 //max reachable ply
 #define MAX_PLY 64
 //interval for when to communicate with gui
 #define LISTEN 16383 //32767 //2047
+
 
 //killer moves [id][ply]
 int killer_moves[2][MAX_PLY] = {};
@@ -3295,9 +3325,6 @@ int pv_table[MAX_PLY][MAX_PLY] = {};
 
 int follow_pv = 0, score_pv = 0;
 
-//half move counter
-int ply = 0;
-
 int move_scores[255] = {};
 
 
@@ -3316,10 +3343,8 @@ static inline void enable_pv_scoring(Moves* move_list)
 			score_pv = TRUE;
 			//enable pv
 			follow_pv = TRUE;
-
 		}
 	}
-
 }
 
 /*
@@ -3418,6 +3443,22 @@ static inline void sort_moves(Moves* move_list)
 	}
 }
 
+//repetition detection
+static inline bool is_repetition()
+{
+	//loop over repetition indices
+	for (int i = 0; i < repetition_index; i++)
+	{
+		//if same hash key 
+		if (repetition_table[i] == hash_key)
+			return true;
+	}
+
+	//if no repetition found
+	return false;
+}
+
+
 //alpha = maximizing
 //beta = minimizing
 static inline int quiescence(int alpha, int beta)
@@ -3427,6 +3468,7 @@ static inline int quiescence(int alpha, int beta)
 		communicate();
 
 	nodes++;
+
 
 	//make sure no overflow on arrays
 	if (ply > MAX_PLY - 1)
@@ -3463,12 +3505,15 @@ static inline int quiescence(int alpha, int beta)
 		copy_board();
 
 		ply++;
+		//add hash to repetition table & increment index
+		repetition_table[++repetition_index] = hash_key;
 
 		if (!make_move(moves->moves[i]))
 		{
 			take_back();
 
 			ply--;
+			repetition_index--;
 			continue;
 		}
 
@@ -3476,6 +3521,7 @@ static inline int quiescence(int alpha, int beta)
 		int score = -quiescence(-beta, -alpha);
 
 		ply--;
+		repetition_index--;
 		take_back();
 		//return if time is up
 		if (stopped) return 0;
@@ -3506,9 +3552,18 @@ static inline int negamax(int alpha, int beta, int depth)
 	int score;
 	int hash_flag = hash_flag_alpha;
 
+
+	//return draw on repetition
+	if (ply && is_repetition())
+		return 0;
+
+
+	//a hack to check if current node is pv or not 
+	bool pv_node = beta - alpha > 1;
+
 	//if move already searched return move score without further search
-	//also make sure we are noot in the root ply
-	if (ply && (score = read_hash_entry(alpha, beta, depth)) != no_hash_entry)	
+	//also make sure we are noot in the root ply and current node is not a PV node
+	if (ply && (score = read_hash_entry(alpha, beta, depth)) != no_hash_entry && !pv_node)	
 		return score;
 	
 
@@ -3550,6 +3605,8 @@ static inline int negamax(int alpha, int beta, int depth)
 
 		//increment ply
 		ply++;
+		//add hash to repetition table & increment index
+		repetition_table[++repetition_index] = hash_key;
 
 		//hash enpassant if available
 		if (enpassant != NO_SQ) hash_key ^= enpassant_keys[enpassant];
@@ -3568,6 +3625,7 @@ static inline int negamax(int alpha, int beta, int depth)
 
 		//revert ply
 		ply--;
+		repetition_index--;
 
 		take_back();
 
@@ -3596,11 +3654,15 @@ static inline int negamax(int alpha, int beta, int depth)
 		copy_board();
 
 		ply++;
+		//add hash to repetition table & increment index
+		repetition_table[++repetition_index] = hash_key;
 
 		if (!make_move(moves->moves[i]))
 		{
 			take_back();
 			ply--;
+			repetition_index--;
+
 			continue;
 		}
 		legal_count++;
@@ -3644,6 +3706,7 @@ static inline int negamax(int alpha, int beta, int depth)
 		}
 
 		ply--;
+		repetition_index--;
 		take_back();
 		//return if time is up
 		if (stopped) return 0;
@@ -3704,7 +3767,7 @@ static inline int negamax(int alpha, int beta, int depth)
 	if (legal_count == 0)
 	{
 		if (in_check)
-			return -49000 + ply;
+			return -mate_value + ply;
 		else//stalemate
 			return 0;
 	}
@@ -3749,8 +3812,8 @@ void search_position(int depth)
 	//new best:  824253
 	//new best:  363479
 
-	int alpha = -Infinity;
-	int beta = Infinity;
+	int alpha = -infinity;
+	int beta = infinity;
 
 	//iterative deepening
 	for (int current_depth = 1; current_depth <= depth; current_depth++)
@@ -3764,8 +3827,8 @@ void search_position(int depth)
 		//we fell outside the window, try again with full window (and same depth)
 		if ((score <= alpha) || (score >= beta))
 		{
-			alpha = -Infinity;
-			beta = Infinity;
+			alpha = -infinity;
+			beta = infinity;
 			continue;
 		}
 		//set up the window for the next itteration
@@ -3777,9 +3840,17 @@ void search_position(int depth)
 		if (stopped) break;
 		previous_best = pv_table[0][0];
 
-		
-		//printf("info score cp %d depth %d nodes %llu pv ", score, current_depth, nodes);
-		printf("info score cp %d depth %d nodes %llu time %llu pv ", score, current_depth, nodes, (get_time_ms() - start_time));
+		//send info to gui
+		printf("info ");
+
+		if (score > -mate_value && score < -mate_score)
+			printf("score mate %d ", -(score + mate_value) / 2);
+		else if (score > mate_score && score < mate_value)
+			printf("score mate %d ", (mate_value - score) / 2);
+		else
+			printf("score cp %d ", score);
+
+		printf("depth %d nodes %llu time %llu pv ", current_depth, nodes, (GetTickCount64() - start_time));
 
 		//loop over pv line
 		for (int i = 0; i < pv_length[0]; i++)
@@ -3907,17 +3978,16 @@ void parse_position(const char* command)
 			if (move == 0)
 				break;//invalide move
 
+			repetition_index++;
+			repetition_table[repetition_index] = hash_key;
+
 			make_move(move);
-
-			/*printf("%s\n",current);
-			std::cout << "cout:" << *current << std::endl;*/
-
+			
 			//move the pointer to next move
 			while (*current && *current != ' ') ++current;
 
 			current++;//skip space
-		}
-		//printf("Cur:%s\n", current);
+		}		
 	}
 	//print_board(true);
 }
@@ -4000,7 +4070,7 @@ void parse_go(const char* command)
 	}
 
 	// init start time
-	start_time = get_time_ms();
+	start_time = GetTickCount64();
 
 	// if time control is available
 	if (time != 0)
@@ -4084,7 +4154,11 @@ void uci_loop()
 		}
 		//UCI position		 
 		else if (strncmp(input, "position", 8) == 0)
+		{
 			parse_position(input);
+
+			clear_hash_table();
+		}
 		//UCI new game
 		else if (strncmp(input, "ucinewgame", 10) == 0)
 		{
@@ -4138,15 +4212,18 @@ int main()
 
 	if (debug)
 	{
-		parse_fen(start_position);
+		parse_fen(repetitions);
 	
 		print_board();
-	
+			
 		search_position(10);
+
 
 		make_move(pv_table[0][0]);
 
 		search_position(10);
+
+		//getchar();
 	}
 	else
 		uci_loop();
