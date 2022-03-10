@@ -3381,8 +3381,8 @@ static inline int evaluate()
 #define mate_value 49000
 #define mate_score 48000
 
-// hash table size (4mb)
-#define tt_size 0x400000
+// hash table size (20mb)
+#define tt_size 800000
 
 #define no_hash_entry infinity * 2
 
@@ -4437,7 +4437,7 @@ int main()
 
 	init_all();
 
-	int debug = 1;
+	int debug = 0;
 
 	if (debug)
 	{
