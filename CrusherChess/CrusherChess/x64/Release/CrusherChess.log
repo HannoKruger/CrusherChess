@@ -1,1 +1,10 @@
-﻿  CrusherChess.vcxproj -> C:\Users\hanno\OneDrive\Documents\Coding\Github\CrusherChess\CrusherChess\x64\Release\CrusherChess.exe
+﻿  CrusherChess.cpp
+C:\Users\hanno\OneDrive\Documents\Coding\Github\CrusherChess\CrusherChess\CrusherChess\CrusherChess.cpp(1525,21): warning C4244: 'initializing': conversion from 'U64' to 'int', possible loss of data
+C:\Users\hanno\OneDrive\Documents\Coding\Github\CrusherChess\CrusherChess\CrusherChess\CrusherChess.cpp(1534,21): warning C4244: 'initializing': conversion from 'U64' to 'int', possible loss of data
+C:\Users\hanno\OneDrive\Documents\Coding\Github\CrusherChess\CrusherChess\CrusherChess\CrusherChess.cpp(3955,34): warning C4267: 'initializing': conversion from 'size_t' to 'int', possible loss of data
+  Generating code
+  2 of 438 functions ( 0.5%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    4 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  CrusherChess.vcxproj -> C:\Users\hanno\OneDrive\Documents\Coding\Github\CrusherChess\CrusherChess\x64\Release\CrusherChess.exe
