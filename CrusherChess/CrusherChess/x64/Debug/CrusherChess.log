@@ -1,5 +1,5 @@
 ﻿  CrusherChess.cpp
-C:\Users\hanno\OneDrive\Documents\Coding\Github\CrusherChess\CrusherChess\CrusherChess\CrusherChess.cpp(1524,21): warning C4244: 'initializing': conversion from 'U64' to 'int', possible loss of data
-C:\Users\hanno\OneDrive\Documents\Coding\Github\CrusherChess\CrusherChess\CrusherChess\CrusherChess.cpp(1533,21): warning C4244: 'initializing': conversion from 'U64' to 'int', possible loss of data
-C:\Users\hanno\OneDrive\Documents\Coding\Github\CrusherChess\CrusherChess\CrusherChess\CrusherChess.cpp(4253,34): warning C4267: 'initializing': conversion from 'size_t' to 'int', possible loss of data
+C:\Users\hanno\OneDrive\Documents\Coding\Github\CrusherChess\CrusherChess\CrusherChess\CrusherChess.cpp(1526,21): warning C4244: 'initializing': conversion from 'U64' to 'int', possible loss of data
+C:\Users\hanno\OneDrive\Documents\Coding\Github\CrusherChess\CrusherChess\CrusherChess\CrusherChess.cpp(1535,21): warning C4244: 'initializing': conversion from 'U64' to 'int', possible loss of data
+C:\Users\hanno\OneDrive\Documents\Coding\Github\CrusherChess\CrusherChess\CrusherChess\CrusherChess.cpp(4349,34): warning C4267: 'initializing': conversion from 'size_t' to 'int', possible loss of data
   CrusherChess.vcxproj -> C:\Users\hanno\OneDrive\Documents\Coding\Github\CrusherChess\CrusherChess\x64\Debug\CrusherChess.exe
