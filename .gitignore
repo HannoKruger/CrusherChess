@@ -1,4 +1,10 @@
-*.ipch
-*.db
-*.db-shm
-*.db-wal
+CrusherChess/.vs/
+CrusherChess/x64/
+CrusherChess/CrusherChess/Release/
+CrusherChess/CrusherChess/LinuxBuild/
+CrusherChess/CrusherChess/x64/
+
+#*.ipch
+#*.db
+#*.db-shm
+#*.db-wal

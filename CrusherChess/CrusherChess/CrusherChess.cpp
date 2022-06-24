@@ -4678,7 +4678,7 @@ int main()
 
 		//printf("score:%d\n", evaluate());
 
-		perft_test(3);
+		perft_test(6);
 		
 		//auto startTime = std::chrono::high_resolution_clock::now();
 
