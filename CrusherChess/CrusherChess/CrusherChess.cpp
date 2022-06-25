@@ -20,6 +20,8 @@
 #include <assert.h>
 #include <set>
 
+#define VERSION 1.2
+
 class TextAttr
 {
 	friend std::ostream& operator<<(std::ostream& out, TextAttr attr)
@@ -221,14 +223,13 @@ static inline int count_bits(U64 num)//fast
 }
 
 
-static inline int get_lsb_index(U64 num)//can be sped up
+static inline int get_lsb_index(U64 num)
 {
 	//-num = (0 - num) = (~num + 1ULL) -> flip bits & add one
 
-	if (num)
-		return count_bits((num & (0 - num)) - 1);
-	else
-		return -1;//return illegal index
+	assert(num != 0ULL);
+	
+	return count_bits((num & (0 - num)) - 1);	
 }
 #pragma endregion
 /****************************************\
@@ -2668,19 +2669,19 @@ void read_input()
 		// if input is available
 		if (strlen(input) > 0)
 		{
-			// match UCI "quit" command
-			if (!strncmp(input, "quit", 4))
+			// match UCI "quit" command //strncmp returns 0 if string are equal
+			if (!strncmp(input, "quit", 4) || !strncmp(input, "stop", 4))
 			{
 				// tell engine to terminate exacution    
 				quit = true;
 			}
 
-			// // match UCI "stop" command
-			else if (!strncmp(input, "stop", 4))
-			{
-				// tell engine to terminate exacution
-				quit = true;
-			}
+			
+			//else if (!strncmp(input, "stop", 4))
+			//{
+			//	// tell engine to terminate exacution
+			//	quit = true;
+			//}
 		}
 	}
 }
@@ -3611,8 +3612,8 @@ static inline int evaluate()
 #define mate_value 49000
 #define mate_score 48000
 
-// hash table size (20mb)
-#define tt_size 800000
+// hash table size (16mb)
+#define tt_size 16
 
 #define no_hash_entry infinity * 2
 
@@ -3625,14 +3626,14 @@ static inline int evaluate()
 // transposition table data structure
 typedef struct TT
 {
-	U64 key;   // "almost" unique chess position identifier
-	int depth;      // current search depth
-	int flag;       // flag the type of node (fail-low/fail-high/PV) 
-	int score;      // score (alpha/beta/PV)
-} TT;               // transposition table (TT aka hash table)
+	U64 key;	//8 byte	"almost" unique chess position identifier
+	int depth;  //4 byte    current search depth
+	int flag;   //4 byte    flag the type of node (fail-low/fail-high/PV) 
+	int score;  //4 byte    score (alpha/beta/PV)
+} TT;      //sum:20 byte   (TT aka hash table)
 
 // define TT instance
-TT hash_table[tt_size];
+TT hash_table[tt_size * 50000];
 
 // clear TT (hash table)
 void clear_hash_table()
@@ -4332,6 +4333,7 @@ void search_position(int depth)
 	//else if the search was not stopped or we dont have a previous best move return current
 	else
 		print_move(pv_table[0][0]);
+
 	printf("\n");
 }
 
@@ -4537,7 +4539,7 @@ void parse_go(const char* command)
 	start_time = GetTickCount64();
 
 	// if time control is available
-	if (time != 0)
+	if (time)
 	{
 		// flag we're playing with time control
 		time_set = true;
@@ -4555,7 +4557,7 @@ void parse_go(const char* command)
 
 	// if depth is not available
 	if (depth == 0)
-		// set depth to 64 plies (takes ages to complete...)
+		// set depth to 64 plies
 		depth = MAX_PLY;
 
 	// print debug info
@@ -4591,8 +4593,8 @@ void uci_loop()
 	char input[size];
 
 	//engine info
-	printf("Crusher Chess\n");
-	printf("Hanno Kruger\n");
+	printf("id name CrusherChess %s\n", VERSION);
+	printf("id author Hanno Kruger\n");
 	printf("uciok\n");
 
 	//uci loop
@@ -4640,8 +4642,8 @@ void uci_loop()
 		else if (strncmp(input, "uci", 3) == 0)
 		{
 			//engine info
-			printf("Crusher Chess\n");
-			printf("Hanno Kruger\n");
+			printf("id name CrusherChess %s\n",VERSION);
+			printf("id author Hanno Kruger\n");
 			printf("uciok\n");
 		}
 		else if (input[0] == 'd')
@@ -4671,14 +4673,14 @@ int main()
 
 	if (debug)
 	{
-		//parse_fen("1n6/pppppppp/8/8/8/8/PPPPPPPP/8 w KQkq - 0 1 ");
-		parse_fen(start_position);
+		parse_fen("1k6/8/8/8/8/8/8/6K1 w - - 0 1");
+		//parse_fen(start_position);
 
 		print_board();
 
-		//printf("score:%d\n", evaluate());
+		printf("score:%d\n", evaluate());
 
-		perft_test(6);
+		//perft_test(5);
 		
 		//auto startTime = std::chrono::high_resolution_clock::now();
 
@@ -4752,6 +4754,6 @@ int main()
 		uci_loop();
 
 
-	//std::wcin.get();
+	std::wcin.get();
 	return 0;
 }
