@@ -20,7 +20,8 @@
 #include <assert.h>
 #include <set>
 
-#define VERSION 1.2
+const char* VERSION = "1.2";
+#define MAX_HASH 32768
 
 class TextAttr
 {
@@ -84,6 +85,7 @@ U64 mask_rook_attacks(int square);
 U64 bishop_blocker_attacks(int square, U64 block);
 U64 rook_blocker_attacks(int square, U64 block);
 void init_leapers_attacks();
+void init_hash_table(int mb);
 void init_all();
 
 static inline unsigned int randu32();
@@ -1360,8 +1362,8 @@ void init_all()
 	init_sliders_attacks(ROOK);
 	init_random_keys();
 	init_evaluation_masks();
-
-	clear_hash_table();
+	//init hash table with default 64mb
+	init_hash_table(64);
 
 	parse_fen(start_position);
 }
@@ -3313,7 +3315,7 @@ static inline int evaluate()
 
 
 	//static evaluation
-	int score = 0;
+	int score = 0,opening_score = 0,endgame_score = 0;
 
 	//current pieces bitboard copy
 	U64 bitboard;
@@ -3331,20 +3333,23 @@ static inline int evaluate()
 			piece = bb_piece;
 			square = get_lsb_index(bitboard);
 
-			/*
-				Now in order to calculate interpolated score
-				for a given game phase we use this formula
-				(same for material and positional scores):
+			// get opening/endgame material score
+			opening_score += material_score[OPENING][piece];
+			endgame_score += material_score[ENDGAME][piece];
 
-				(
-				  score_opening * game_phase_score +
-				  score_endgame * (opening_phase_score - game_phase_score)
-				) / opening_phase_score
+			if (piece < 6)//white
+			{
+				opening_score += positional_score[OPENING][piece][square];
+				endgame_score += positional_score[ENDGAME][piece][square];
+			}
+			else		 //black    //using -6 might be faster here
+			{
+				opening_score -= positional_score[OPENING][piece_to_type[piece]][mirror_square[square]];
+				endgame_score -= positional_score[ENDGAME][piece_to_type[piece]][mirror_square[square]];
+			}
 
-				E.g. the score for pawn on d4 at phase say 5000 would be
-				interpolated_score = (12 * 5000 + (-7) * (6192 - 5000)) / 6192 = 8,342377261
-			*/
-		
+			
+		    /*old method:
 			//calculate the interpolated material score between opening and endgame
 			if (game_phase == MIDDELGAME)		
 				score += lerp_material_score(piece, game_phase_score);		
@@ -3369,6 +3374,9 @@ static inline int evaluate()
 				else		  //black    //-6 might be faster here
 					score -= positional_score[game_phase][piece_to_type[piece]][mirror_square[square]];
 			}
+			*/
+
+
 
 			
 			{
@@ -3591,6 +3599,35 @@ static inline int evaluate()
 	}
 
 
+	/*
+				Now in order to calculate interpolated score
+				for a given game phase we use this formula
+				(same for material and positional scores):
+
+				(
+				  score_opening * game_phase_score +
+				  score_endgame * (opening_phase_score - game_phase_score)
+				) / opening_phase_score
+
+				E.g. the score for pawn on d4 at phase say 5000 would be
+				interpolated_score = (12 * 5000 + (-7) * (6192 - 5000)) / 6192 = 8,342377261
+			*/
+
+	// interpolate score in the middlegame
+	if (game_phase == MIDDELGAME)
+		score = (
+			opening_score * game_phase_score +
+			endgame_score * (opening_phase_score - game_phase_score)
+			) / opening_phase_score;
+
+	// return pure opening score in opening
+	else if (game_phase == OPENING) score = opening_score;
+
+	// return pure endgame score in engame
+	else if (game_phase == ENDGAME) score = endgame_score;
+
+
+
 	return (side == WHITE) ? score : -score;
 }
 
@@ -3613,7 +3650,8 @@ static inline int evaluate()
 #define mate_score 48000
 
 // hash table size (16mb)
-#define tt_size 16
+//#define tt_size 16
+U64 hash_entries = 0ULL;
 
 #define no_hash_entry infinity * 2
 
@@ -3633,23 +3671,65 @@ typedef struct TT
 } TT;      //sum:20 byte   (TT aka hash table)
 
 // define TT instance
-TT hash_table[tt_size * 50000];
+TT* hash_table = nullptr;
+
+// dynamically allocate memory for hash table
+void init_hash_table(int mb)
+{
+	const U64 ONE_MB = 0x100000ULL;
+
+	// init hash size
+	U64 hash_size = ONE_MB * mb;
+
+	// init number of hash entries
+	hash_entries = hash_size / sizeof(TT);
+
+	// free hash table if not empty
+	if (hash_table != nullptr)
+	{
+		printf("    Clearing hash memory...\n");
+		// free hash table dynamic memory
+		free(hash_table);
+	}
+
+	// allocate memory
+	hash_table = (TT*)malloc(hash_entries * sizeof(TT));
+
+	// if allocation has failed
+	if (hash_table == nullptr)
+	{
+		printf("    Couldn't allocate memory for hash table, trying %dMB...", mb / 2);
+
+		// try to allocate with half size
+		init_hash_table(mb / 2);
+	}
+	// if allocation succeeded
+	else
+	{
+		// clear hash table
+		clear_hash_table();
+		printf("    Hash table is initialized with %llu entries\n", hash_entries);
+	}
+}
 
 // clear TT (hash table)
 void clear_hash_table()
 {
-	//// loop over TT elements
-	//for (int index = 0; index < hash_size; index++)
-	//{
-	//	// reset TT inner fields
-	//	hash_table[index].key = 0;
-	//	hash_table[index].depth = 0;
-	//	hash_table[index].flag = 0;
-	//	hash_table[index].score = 0;
-	//}
+	// init hash table entry pointer
+	TT* hash_entry;
+
+	// loop over TT elements
+	for (hash_entry = hash_table; hash_entry < hash_table + hash_entries; hash_entry++)
+	{
+		// reset TT inner fields
+		hash_entry->key = 0;
+		hash_entry->depth = 0;
+		hash_entry->flag = 0;
+		hash_entry->score = 0;
+	}
 
 	//this propably wont work for dynamic array
-	memset(hash_table, 0, sizeof(hash_table));
+	//memset(hash_table, 0, sizeof(hash_table));
 
 	assert(hash_table[0].depth == 0);
 	assert(hash_table[0].flag == 0);
@@ -3660,7 +3740,7 @@ void clear_hash_table()
 static inline int read_hash_entry(int alpha, int beta, int depth)
 {
 	//bring hash key down to table index storing the score data for current board position if available
-	TT* hash_entry = &hash_table[hash_key % tt_size];
+	TT* hash_entry = &hash_table[hash_key % hash_entries];
 
 	//make sure we're dealing with correct position
 	if (hash_entry->key == hash_key)
@@ -3694,7 +3774,7 @@ static inline int read_hash_entry(int alpha, int beta, int depth)
 static inline void write_hash_entry(int score, int depth, int hash_flag)
 {
 	//bring hash key down to table index storing the score data for current board position if available
-	TT* hash_entry = &hash_table[hash_key % tt_size];
+	TT* hash_entry = &hash_table[hash_key % hash_entries];
 
 	//adjust score to find mate in shortest path
 	//store score independant from actual path
@@ -4593,8 +4673,8 @@ void uci_loop()
 	char input[size];
 
 	//engine info
-	printf("id name CrusherChess %s\n", VERSION);
-	printf("id author Hanno Kruger\n");
+	printf("CrusherChess %s ", VERSION);
+	printf("by Hanno Kruger\n");
 	printf("uciok\n");
 
 	//uci loop
@@ -4644,7 +4724,23 @@ void uci_loop()
 			//engine info
 			printf("id name CrusherChess %s\n",VERSION);
 			printf("id author Hanno Kruger\n");
+			printf("option name Hash type spin default 64 min 1 max %d\n", MAX_HASH);
 			printf("uciok\n");
+		}
+		else if (!strncmp(input, "setoption name Hash value ", 26))
+		{
+			int mb = 64;
+
+			// init MB
+			sscanf_s(input, "%*s %*s %*s %*s %d", &mb);
+
+			// adjust MB if going beyond the allowed bounds
+			if (mb < 1) mb = 1;
+			if (mb > MAX_HASH) mb = MAX_HASH;
+
+			// set hash table size in MB
+			printf("    Set hash table size to %dMB\n", mb);
+			init_hash_table(mb);
 		}
 		else if (input[0] == 'd')
 			print_board();
@@ -4673,7 +4769,9 @@ int main()
 
 	if (debug)
 	{
-		parse_fen("1k6/8/8/8/8/8/8/6K1 w - - 0 1");
+		//tricky
+		parse_fen("r3k2r/p1ppqpb1/1n2pnp1/3PN3/1p2P3/2N2Q1p/PPPB1PPP/R3K2R w KQkq - 0 1 ");
+		//parse_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 ");
 		//parse_fen(start_position);
 
 		print_board();
@@ -4755,5 +4853,6 @@ int main()
 
 
 	std::wcin.get();
+	free(hash_table);
 	return 0;
 }
