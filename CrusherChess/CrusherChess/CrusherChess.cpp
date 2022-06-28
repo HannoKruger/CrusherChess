@@ -2705,7 +2705,7 @@ static void communicate()
 #pragma endregion
 /****************************************\
  ========================================
-				My Search
+			   Simple Search
  ========================================
 \****************************************/
 #pragma region
@@ -3227,6 +3227,26 @@ const int mirror_square[SQUARE_NB] =
 	   a b c d e f g h       a b c d e f g h       a b c d e f g h        a b c d e f g h
 */
 
+
+
+//// file masks [square]
+//U64 file_masks[SQUARE_NB];
+//
+//// rank masks [square]
+//U64 rank_masks[SQUARE_NB];
+//
+//// isolated pawn masks [square]
+//U64 isolated_masks[SQUARE_NB];
+//
+//// white passed pawn masks [square]
+//U64 white_passed_masks[SQUARE_NB];
+//
+//// black passed pawn masks [square]
+//U64 black_passed_masks[SQUARE_NB];
+
+
+
+
 // extract rank from a square [square]
 const int get_rank[SQUARE_NB] =
 {
@@ -3240,17 +3260,36 @@ const int get_rank[SQUARE_NB] =
 	0, 0, 0, 0, 0, 0, 0, 0
 };
 
-// penalties
-const int double_pawn_penalty = -20;
-const int isolated_pawn_penalty = -10;
+// double pawns penalty
+const int double_pawn_penalty_opening = -5;
+const int double_pawn_penalty_endgame = -10;
+
+// isolated pawn penalty
+const int isolated_pawn_penalty_opening = -5;
+const int isolated_pawn_penalty_endgame = -10;
+
 // bonusses
 const int passed_pawn_bonus[8] = { 0, 10, 30, 50, 75, 100, 150, 200 };
-//file scores
+
+// semi open file score
 const int semi_open_file_score = 10;
+
+// open file score
 const int open_file_score = 15;
 
+// mobility units (values from engine Fruit reloaded)
+static const int bishop_unit = 4;
+static const int queen_unit = 9;
+
+// mobility bonuses (values from engine Fruit reloaded)
+static const int bishop_mobility_opening = 5;
+static const int bishop_mobility_endgame = 5;
+static const int queen_mobility_opening = 1;
+static const int queen_mobility_endgame = 2;
+
+// king's shield bonus
 const int king_shield_bonus = 5;
-const int mobility_bonus = 5;
+
 
 static inline int get_game_phase_score()
 {
@@ -3303,16 +3342,6 @@ static inline int evaluate()
 	int game_phase_score = get_game_phase_score();
 	//printf("game phase score: %d\n", game_phase_score);
 	 
-	int game_phase;
-
-	//game > opening
-	if (game_phase_score > opening_phase_score) game_phase = OPENING;
-	//game < endgame
-	else if (game_phase_score < endgame_phase_score) game_phase = ENDGAME;
-	//game between opening and endgame 
-	else game_phase = MIDDELGAME;
-
-
 
 	//static evaluation
 	int score = 0,opening_score = 0,endgame_score = 0;
@@ -3320,8 +3349,11 @@ static inline int evaluate()
 	//current pieces bitboard copy
 	U64 bitboard;
 
-	//init piece and score
+	//init piece and square
 	int piece, square;
+
+	//penalties
+	int double_pawns = 0;
 
 
 	for (int bb_piece = P; bb_piece <= k; bb_piece++)
@@ -3377,221 +3409,179 @@ static inline int evaluate()
 			*/
 
 
-
 			
+				
+			switch (piece)
 			{
-				////positional score
-				//switch (piece)
-				//{
-				//	// evaluate white pawns
-				//case P:
-				//	// interpolate scores in middle_game
-				//	if (game_phase == MIDDELGAME)
-				//		score += lerp_positional_score(PAWN, square, game_phase_score);
-				//	// score material weights with pure scores in OPENING or ENDGAME
-				//	else score += positional_score[game_phase][PAWN][square];
+				//evaluate white pawns
+				case P:
+				
+					// double pawn penalty
+					double_pawns = count_bits(bitboards[P] & file_masks[square]);
 
-				//	/* double pawn penalty
-				//	double_pawns = count_bits(bitboards[P] & file_masks[square]);
+					// on double pawns (tripple, etc)
+					if (double_pawns > 1)
+					{
+						opening_score += (double_pawns - 1) * double_pawn_penalty_opening;
+						endgame_score += (double_pawns - 1) * double_pawn_penalty_endgame;
+					}
 
-				//	// on double pawns (tripple, etc)
-				//	if (double_pawns > 1)
-				//		score += double_pawns * double_pawn_penalty;
+					// on isolated pawn
+					if ((bitboards[P] & isolated_masks[square]) == 0)
+					{
+						// give an isolated pawn penalty
+						opening_score += isolated_pawn_penalty_opening;
+						endgame_score += isolated_pawn_penalty_endgame;
+					}
+					// on passed pawn
+					if ((passed_masks[WHITE][square] & bitboards[p]) == 0)
+					{
+						// give passed pawn bonus
+						opening_score += passed_pawn_bonus[get_rank[square]];
+						endgame_score += passed_pawn_bonus[get_rank[square]];
+					}
+					break;
+				//evaluate white knights
+				case N:
+				
+					break;
+				//evaluate white bishops
+				case B:
+					// mobility
+					opening_score += (count_bits(get_bishop_attacks(square, occupancies[BOTH])) - bishop_unit) * bishop_mobility_opening;
+					endgame_score += (count_bits(get_bishop_attacks(square, occupancies[BOTH])) - bishop_unit) * bishop_mobility_endgame;
+					break;
+				//evaluate white rooks
+				case R:
+					// semi open file
+					if ((bitboards[P] & file_masks[square]) == 0)
+					{
+						// add semi open file bonus
+						opening_score += semi_open_file_score;
+						endgame_score += semi_open_file_score;
+					}
 
-				//	// on isolated pawn
-				//	if ((bitboards[P] & isolated_masks[square]) == 0)
-				//		// give an isolated pawn penalty
-				//		score += isolated_pawn_penalty;
+					// semi open file
+					if (((bitboards[P] | bitboards[p]) & file_masks[square]) == 0)
+					{
+						// add semi open file bonus
+						opening_score += open_file_score;
+						endgame_score += open_file_score;
+					}
+					break;
+				//evaluate white queens
+				case Q:
+					// mobility
+					opening_score += (count_bits(get_queen_attacks(square, occupancies[BOTH])) - queen_unit) * queen_mobility_opening;
+					endgame_score += (count_bits(get_queen_attacks(square, occupancies[BOTH])) - queen_unit) * queen_mobility_endgame;
+					break;
+				//evaluate white king
+				case K:
+					
+					// open file
+					if (((bitboards[P] | bitboards[p]) & file_masks[square]) == 0)
+					{
+						// add open file penalty
+						opening_score -= open_file_score;
+						endgame_score -= open_file_score;
+					}
+					// semi open file
+					else if ((bitboards[P] & file_masks[square]) == 0)
+					{
+						// add semi open file penalty
+						opening_score -= semi_open_file_score;
+						endgame_score -= semi_open_file_score;
+					}
 
-				//	// on passed pawn
-				//	if ((white_passed_masks[square] & bitboards[p]) == 0)
-				//		// give passed pawn bonus
-				//		score += passed_pawn_bonus[get_rank[square]];
-				//	*/
-				//	break;
+					// king safety bonus
+					opening_score += count_bits(king_attacks[square] & occupancies[WHITE]) * king_shield_bonus;
+					endgame_score += count_bits(king_attacks[square] & occupancies[WHITE]) * king_shield_bonus;
 
-				//	// evaluate white knights
-				//case N:
-				//	// interpolate scores in middle_game
-				//	if (game_phase == MIDDELGAME)
-				//		score += lerp_positional_score(KNIGHT, square, game_phase_score);
-				//	// score material weights with pure scores in OPENING or ENDGAME
-				//	else score += positional_score[game_phase][KNIGHT][square];
+					break;
+				//evaluate black pawns
+				case p:
+					// double pawn penalty
+					double_pawns = count_bits(bitboards[p] & file_masks[square]);
 
-				//	break;
+					// on double pawns (tripple, etc)
+					if (double_pawns > 1)
+					{
+						opening_score -= (double_pawns - 1) * double_pawn_penalty_opening;
+						endgame_score -= (double_pawns - 1) * double_pawn_penalty_endgame;
+					}
 
-				//	// evaluate white bishops
-				//case B:
-				//	/// interpolate scores in middle_game
-				//	if (game_phase == MIDDELGAME)
-				//		score += lerp_positional_score(BISHOP, square, game_phase_score);
-				//	// score material weights with pure scores in OPENING or ENDGAME
-				//	else score += positional_score[game_phase][BISHOP][square];
+					// on isolated pawn
+					if ((bitboards[p] & isolated_masks[square]) == 0)
+					{
+						// give an isolated pawn penalty
+						opening_score -= isolated_pawn_penalty_opening;
+						endgame_score -= isolated_pawn_penalty_endgame;
+					}
+					// on passed pawn
+					if ((passed_masks[BLACK][square] & bitboards[P]) == 0)
+					{
+						// give passed pawn bonus
+						opening_score -= passed_pawn_bonus[get_rank[square]];
+						endgame_score -= passed_pawn_bonus[get_rank[square]];
+					}
+					break;
+				//evaluate black knights
+				case n:
+				
+					break;
+					//evaluate black bishops
+				case b:
+					// mobility
+					opening_score -= (count_bits(get_bishop_attacks(square, occupancies[BOTH])) - bishop_unit) * bishop_mobility_opening;
+					endgame_score -= (count_bits(get_bishop_attacks(square, occupancies[BOTH])) - bishop_unit) * bishop_mobility_endgame;
+					break;
+				//evaluate black rooks
+				case r:
+					// semi open file
+					if ((bitboards[p] & file_masks[square]) == 0)
+					{
+						// add semi open file bonus
+						opening_score -= semi_open_file_score;
+						endgame_score -= semi_open_file_score;
+					}
 
-				//	// mobility
-				//	//score += count_bits(get_bishop_attacks(square, occupancies[both]));
-				//	break;
+					// semi open file
+					if (((bitboards[P] | bitboards[p]) & file_masks[square]) == 0)
+					{
+						// add semi open file bonus
+						opening_score -= open_file_score;
+						endgame_score -= open_file_score;
+					}
+					break;
+				//evaluate black queens
+				case q:
+					// mobility
+					opening_score -= (count_bits(get_queen_attacks(square, occupancies[BOTH])) - queen_unit) * queen_mobility_opening;
+					endgame_score -= (count_bits(get_queen_attacks(square, occupancies[BOTH])) - queen_unit) * queen_mobility_endgame;
+					break;
+				//evaluate black king
+				case k:
+					//open file
+					if (((bitboards[P] | bitboards[p]) & file_masks[square]) == 0)
+					{
+						//open file penalty
+						opening_score += open_file_score;
+						endgame_score += open_file_score;
+					}
+					// semi open file
+					else if ((bitboards[p] & file_masks[square]) == 0)
+					{
+						//add semi open file penalty
+						opening_score += semi_open_file_score;
+						endgame_score += semi_open_file_score;
+					}		
 
-				//	// evaluate white rooks
-				//case R:
-				//	/// interpolate scores in middle_game
-				//	if (game_phase == MIDDELGAME)
-				//		score += lerp_positional_score(ROOK, square, game_phase_score);
-				//	// score material weights with pure scores in OPENING or ENDGAME
-				//	else score += positional_score[game_phase][ROOK][square];
-
-				//	/* semi open file
-				//	if ((bitboards[P] & file_masks[square]) == 0)
-				//		// add semi open file bonus
-				//		score += semi_open_file_score;
-
-				//	// semi open file
-				//	if (((bitboards[P] | bitboards[p]) & file_masks[square]) == 0)
-				//		// add semi open file bonus
-				//		score += open_file_score;
-				//	*/
-				//	break;
-
-				//	// evaluate white queens
-				//case Q:
-				//	/// interpolate scores in middle_game
-				//	if (game_phase == MIDDELGAME)
-				//		score += lerp_positional_score(QUEEN, square, game_phase_score);
-				//	// score material weights with pure scores in OPENING or ENDGAME
-				//	else score += positional_score[game_phase][QUEEN][square];
-
-				//	// mobility
-				//	//score += count_bits(get_queen_attacks(square, occupancies[both]));
-				//	break;
-
-				//	// evaluate white king
-				//case K:
-				//	/// interpolate scores in middle_game
-				//	if (game_phase == MIDDELGAME)
-				//		score += lerp_positional_score(KING, square, game_phase_score);
-				//	// score material weights with pure scores in OPENING or ENDGAME
-				//	else score += positional_score[game_phase][KING][square];
-
-				//	/* semi open file
-				//	if ((bitboards[P] & file_masks[square]) == 0)
-				//		// add semi open file penalty
-				//		score -= semi_open_file_score;
-
-				//	// semi open file
-				//	if (((bitboards[P] | bitboards[p]) & file_masks[square]) == 0)
-				//		// add semi open file penalty
-				//		score -= open_file_score;
-
-				//	// king safety bonus
-				//	score += count_bits(king_attacks[square] & occupancies[white]) * king_shield_bonus;
-				//	*/
-				//	break;
-
-				//	// evaluate black pawns
-				//case p:
-				//	// interpolate scores in middle_game
-				//	if (game_phase == MIDDELGAME)
-				//		score -= lerp_positional_score(PAWN, mirror_square[square], game_phase_score);
-				//	// score material weights with pure scores in OPENING or ENDGAME
-				//	else score -= positional_score[game_phase][PAWN][mirror_square[square]];
-
-				//	/* double pawn penalty
-				//	double_pawns = count_bits(bitboards[p] & file_masks[square]);
-
-				//	// on double pawns (tripple, etc)
-				//	if (double_pawns > 1)
-				//		score -= double_pawns * double_pawn_penalty;
-
-				//	// on isolated pawnd
-				//	if ((bitboards[p] & isolated_masks[square]) == 0)
-				//		// give an isolated pawn penalty
-				//		score -= isolated_pawn_penalty;
-
-				//	// on passed pawn
-				//	if ((black_passed_masks[square] & bitboards[P]) == 0)
-				//		// give passed pawn bonus
-				//		score -= passed_pawn_bonus[get_rank[mirror_square[square]]];
-				//	*/
-				//	break;
-
-				//	// evaluate black knights
-				//case n:
-				//	// interpolate scores in middle_game
-				//	if (game_phase == MIDDELGAME)
-				//		score -= lerp_positional_score(KNIGHT, mirror_square[square], game_phase_score);
-				//	// score material weights with pure scores in OPENING or ENDGAME
-				//	else score -= positional_score[game_phase][KNIGHT][mirror_square[square]];
-
-				//	break;
-
-				//	// evaluate black bishops
-				//case b:
-				//	// interpolate scores in middle_game
-				//	if (game_phase == MIDDELGAME)
-				//		score -= lerp_positional_score(BISHOP, mirror_square[square], game_phase_score);
-				//	// score material weights with pure scores in OPENING or ENDGAME
-				//	else score -= positional_score[game_phase][BISHOP][mirror_square[square]];
-
-				//	// mobility
-				//	//score -= count_bits(get_bishop_attacks(square, occupancies[both]));
-				//	break;
-
-				//	// evaluate black rooks
-				//case r:
-				//	// interpolate scores in middle_game
-				//	if (game_phase == MIDDELGAME)
-				//		score -= lerp_positional_score(ROOK, mirror_square[square], game_phase_score);
-				//	// score material weights with pure scores in OPENING or ENDGAME
-				//	else score -= positional_score[game_phase][ROOK][mirror_square[square]];
-
-				//	/* semi open file
-				//	if ((bitboards[p] & file_masks[square]) == 0)
-				//		// add semi open file bonus
-				//		score -= semi_open_file_score;
-
-				//	// semi open file
-				//	if (((bitboards[P] | bitboards[p]) & file_masks[square]) == 0)
-				//		// add semi open file bonus
-				//		score -= open_file_score;
-				//	*/
-				//	break;
-
-				//	// evaluate black queens
-				//case q:
-				//	// interpolate scores in middle_game
-				//	if (game_phase == MIDDELGAME)
-				//		score -= lerp_positional_score(QUEEN, mirror_square[square], game_phase_score);
-				//	// score material weights with pure scores in OPENING or ENDGAME
-				//	else score -= positional_score[game_phase][QUEEN][mirror_square[square]];
-
-				//	// mobility
-				//	//score -= count_bits(get_queen_attacks(square, occupancies[both]));
-				//	break;
-
-				//	// evaluate black king
-				//case k:
-				//	// interpolate scores in middle_game
-				//	if (game_phase == MIDDELGAME)
-				//		score -= lerp_positional_score(KING, mirror_square[square], game_phase_score);
-				//	// score material weights with pure scores in OPENING or ENDGAME
-				//	else score -= positional_score[game_phase][KING][mirror_square[square]];
-
-				//	/* semi open file
-				//	if ((bitboards[p] & file_masks[square]) == 0)
-				//		// add semi open file penalty
-				//		score += semi_open_file_score;
-
-				//	// semi open file
-				//	if (((bitboards[P] | bitboards[p]) & file_masks[square]) == 0)
-				//		// add semi open file penalty
-				//		score += open_file_score;
-
-				//	// king safety bonus
-				//	score -= count_bits(king_attacks[square] & occupancies[black]) * king_shield_bonus;
-				//	*/
-				//	break;
-				//}
+					//king safety bonus
+					opening_score -= count_bits(king_attacks[square] & occupancies[BLACK]) * king_shield_bonus;
+					endgame_score -= count_bits(king_attacks[square] & occupancies[BLACK]) * king_shield_bonus;
+					break;
 			}
+			
 
 			//pop lsb bit
 			pop_bit(bitboard, square);
@@ -3613,19 +3603,28 @@ static inline int evaluate()
 				interpolated_score = (12 * 5000 + (-7) * (6192 - 5000)) / 6192 = 8,342377261
 			*/
 
-	// interpolate score in the middlegame
-	if (game_phase == MIDDELGAME)
-		score = (
-			opening_score * game_phase_score +
-			endgame_score * (opening_phase_score - game_phase_score)
-			) / opening_phase_score;
+
+
+			//int game_phase;
+
+			////game > opening
+			//if (game_phase_score > opening_phase_score) game_phase = OPENING;
+			////game < endgame
+			//else if (game_phase_score < endgame_phase_score) game_phase = ENDGAME;
+			////game between opening and endgame 
+			//else game_phase = MIDDELGAME;
+
 
 	// return pure opening score in opening
-	else if (game_phase == OPENING) score = opening_score;
-
+	if (game_phase_score > opening_phase_score) score = opening_score;
 	// return pure endgame score in engame
-	else if (game_phase == ENDGAME) score = endgame_score;
-
+	else if (game_phase_score < endgame_phase_score) score = endgame_score;
+	// interpolate score in the middlegame
+	else
+	 score = (
+		 opening_score * game_phase_score +
+		 endgame_score * (opening_phase_score - game_phase_score)
+		 ) / opening_phase_score;
 
 
 	return (side == WHITE) ? score : -score;
@@ -4093,6 +4092,9 @@ const int reduction_limit = 3;
 //main search
 static inline int negamax(int alpha, int beta, int depth)
 {
+	//init pv length
+	pv_length[ply] = ply;
+
 	//current move score
 	int score;
 	int hash_flag = hash_flag_alpha;
@@ -4116,7 +4118,7 @@ static inline int negamax(int alpha, int beta, int depth)
 	if ((nodes & LISTEN) == 0)
 		communicate();
 
-	pv_length[ply] = ply;
+	
 
 	if (depth == 0)
 		//run quisuince
@@ -4632,12 +4634,18 @@ void parse_go(const char* command)
 		else if (time > 25) time -= 17;
 		else if (time > 15) time -= 10;
 
+		//use this instead(fixes loosing on time)? seems to only fail with 0 time and increment
+		// treat increment as seconds per move when time is almost up
+		//if (time < 1500 && inc && depth == 64) stoptime = starttime + inc - 50;
+
 		stop_time = start_time + time + inc;
+
+		if (time < 10 && inc > 10) stop_time -= 10;
 	}
 
 	// if depth is not available
 	if (depth == 0)
-		// set depth to 64 plies
+		// set depth to max
 		depth = MAX_PLY;
 
 	// print debug info
