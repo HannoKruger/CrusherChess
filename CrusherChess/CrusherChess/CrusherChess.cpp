@@ -20,7 +20,7 @@
 #include <assert.h>
 #include <set>
 
-const char* VERSION = "1.2";
+const char* VERSION = "1.3";
 #define MAX_HASH 32768
 
 class TextAttr
@@ -4629,6 +4629,8 @@ void parse_go(const char* command)
 		// set up timing
 		time /= moves_to_go;
 
+		
+
 		if (time > 100) time -= 30;
 		else if (time > 50) time -= 25;
 		else if (time > 25) time -= 17;
@@ -4773,7 +4775,7 @@ int main()
 
 	init_all();
 
-	int debug = 1;
+	int debug = 0;
 
 	if (debug)
 	{
@@ -4855,12 +4857,14 @@ int main()
 
 		
 		//getchar();
+
+		std::wcin.get();
 	}
 	else
 		uci_loop();
 
 
-	std::wcin.get();
+	
 	free(hash_table);
 	return 0;
 }
