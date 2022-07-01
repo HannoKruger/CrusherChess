@@ -3686,7 +3686,7 @@ void init_hash_table(int mb)
 	// free hash table if not empty
 	if (hash_table != nullptr)
 	{
-		printf("    Clearing hash memory...\n");
+		printf("Clearing hash memory...\n");
 		// free hash table dynamic memory
 		free(hash_table);
 	}
@@ -3697,7 +3697,7 @@ void init_hash_table(int mb)
 	// if allocation has failed
 	if (hash_table == nullptr)
 	{
-		printf("    Couldn't allocate memory for hash table, trying %dMB...", mb / 2);
+		printf("Couldn't allocate memory for hash table, trying %dMB...", mb / 2);
 
 		// try to allocate with half size
 		init_hash_table(mb / 2);
@@ -3707,7 +3707,7 @@ void init_hash_table(int mb)
 	{
 		// clear hash table
 		clear_hash_table();
-		printf("    Hash table is initialized with %llu entries\n", hash_entries);
+		printf("Hash table is initialized with %llu entries\n", hash_entries);
 	}
 }
 
@@ -4406,6 +4406,9 @@ void search_position(int depth)
 			printf(" ");
 		}
 		printf("\n");
+
+		if (time_set && GetTickCount64() + 2 > stop_time) break;
+		
 	}
 
 	printf("bestmove ");
@@ -4563,8 +4566,8 @@ void parse_go(const char* command)
 
 	int moves_to_go = moves_by_pieces[get_piece_count()];
 
-	int depth = 0, inc = 0;
-	U64 time = 0ULL, move_time = 0ULL;
+	int depth = 0;
+	U64 time = 0ULL, move_time = 0ULL, inc = 0ULL;
 	const char* argument = NULL;
 
 	time_set = false;
@@ -4574,23 +4577,35 @@ void parse_go(const char* command)
 
 	// match UCI "binc" command
 	if ((argument = strstr(command, "binc")) && side == BLACK)
+	{
 		// parse black time increment
 		inc = atoi(argument + 5);
+		time_set = true;
+	}
 
 	// match UCI "winc" command
 	if ((argument = strstr(command, "winc")) && side == WHITE)
+	{
 		// parse white time increment
 		inc = atoi(argument + 5);
+		time_set = true;
+	}
 
 	// match UCI "wtime" command
 	if ((argument = strstr(command, "wtime")) && side == WHITE)
+	{
 		// parse white time limit
 		time = atoi(argument + 6);
+		time_set = true;
+	}
 
 	// match UCI "btime" command
 	if ((argument = strstr(command, "btime")) && side == BLACK)
+	{
 		// parse black time limit
 		time = atoi(argument + 6);
+		time_set = true;
+	}
 
 	// match UCI "movestogo" command
 	if ((argument = strstr(command, "movestogo")))
@@ -4599,15 +4614,18 @@ void parse_go(const char* command)
 
 	// match UCI "movetime" command
 	if ((argument = strstr(command, "movetime")))
+	{
 		// parse amount of time allowed to spend to make a move
 		move_time = atoi(argument + 9);
+		time_set = true;
+	}
 
 	// match UCI "depth" command
 	if ((argument = strstr(command, "depth")))
 		// parse search depth
 		depth = atoi(argument + 6);
 
-	// if move time is not available
+	// if move time is available
 	if (move_time != 0)
 	{
 		// set time equal to move time
@@ -4621,28 +4639,27 @@ void parse_go(const char* command)
 	start_time = GetTickCount64();
 
 	// if time control is available
-	if (time)
-	{
-		// flag we're playing with time control
-		time_set = true;
-
+	if (time_set)
+	{		
 		// set up timing
 		time /= moves_to_go;
 
-		
+		time += inc;
 
-		if (time > 100) time -= 30;
-		else if (time > 50) time -= 25;
-		else if (time > 25) time -= 17;
-		else if (time > 15) time -= 10;
+		if (time > 200) time -= 30;
+		else if (time > 100) time -= 25;
+		else if (time > 50) time -= 20;
+		else if (time > 25) time -= 10;
+		else if (time > 10) time -= 5;
+		else if (time > 5) time -= 3;
+		else if (time > 1) time -= 1;
+		else time = 0;
 
 		//use this instead(fixes loosing on time)? seems to only fail with 0 time and increment
 		// treat increment as seconds per move when time is almost up
 		//if (time < 1500 && inc && depth == 64) stoptime = starttime + inc - 50;
 
-		stop_time = start_time + time + inc;
-
-		if (time < 10 && inc > 10) stop_time -= 10;
+		stop_time = start_time + time;
 	}
 
 	// if depth is not available
@@ -4749,7 +4766,7 @@ void uci_loop()
 			if (mb > MAX_HASH) mb = MAX_HASH;
 
 			// set hash table size in MB
-			printf("    Set hash table size to %dMB\n", mb);
+			printf("Set hash table size to %dMB\n", mb);
 			init_hash_table(mb);
 		}
 		else if (input[0] == 'd')
