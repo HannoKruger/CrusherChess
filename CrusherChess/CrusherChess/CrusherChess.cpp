@@ -1,4 +1,6 @@
-﻿//includes
+﻿#define _CRT_SECURE_NO_WARNINGS
+
+//includes
 #pragma region 
 
 #pragma once
@@ -58,7 +60,7 @@ typedef struct Moves
 
 // FEN dedug positions
 #define empty_board "8/8/8/8/8/8/8/8 b - - "                      
-#define start_position "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 "                    
+#define start_position "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 "
 #define tricky_position "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 "
 constexpr auto killer_position = "rnbqkb1r/pp1p1pPp/8/2p1pP2/1P1P4/3P3P/P1P1P3/RNBQKBNR w KQkq e6 0 1";
 #define cmk_position "r2q1rk1/ppp2ppp/2n1bn2/2b1p3/3pP3/3P1NPP/PPP1NPB1/R1BQ1RK1 b - - 0 9 "
@@ -2622,6 +2624,9 @@ int input_waiting()
 {
 	//must be windows
 
+	//linux
+	return 0;
+
 	static int init = 0, pipe;
 	static HANDLE inh;
 	DWORD dw;
@@ -4416,19 +4421,74 @@ void search_position(int depth)
 		}
 		printf("\n");
 
-		if (time_set && GetTickCount64() + 2 > stop_time) break;
-		
-	}
+		if (time_set && GetTickCount64() + 4 > stop_time)
+		{
+			//stopped = true; 	
 
-	printf("bestmove ");
+			if (ply != 0)
+				std::cout << "Ply err! ply->" << ply << std::endl;
+
+			assert(ply == 0);
+
+			break;
+		}
+		//fflush(stdout);
+							
+	}
+	
+	//make sure gui can see move as newline
+	fflush(stdout);
+
+	//std::cout << std::endl;
+
+
+
+	//waist some time to ensure move gets to gui	
+	U64 iters = 10000000;
+
+	volatile int sink;
+	do {
+		sink = 0;
+	} while (--iters > 0);
+	(void)sink;
+	
+	
+	std::string m = "";
+	m += "bestmove ";
+	//printf("bestmove ");
 	//if the search was stopped and we have a previous best move
 	if (stopped && previous_best)
-		print_move(previous_best);
+		m += print_move(previous_best);
 	//else if the search was not stopped or we dont have a previous best move return current
 	else
-		print_move(pv_table[0][0]);
+		m += print_move(pv_table[0][0]);
 
-	printf("\n");
+	std::cout << m << std::endl;
+	
+	
+	//waist some time to ensure move gets to gui	
+	iters = 10000000;
+	
+
+	//auto start = std::chrono::system_clock::now();
+
+	do {
+		sink = 0;
+	} while (--iters > 0);
+	(void)sink;
+
+	//auto end = std::chrono::system_clock::now();
+	//auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+	//std::cout << elapsed << '\n';
+	
+	
+	
+	
+	//printf("\n");
+	//std::cout << std::endl;
+	
+	//propably not nessecary
+	fflush(stdout);
 }
 
 #pragma endregion
@@ -4656,11 +4716,11 @@ void parse_go(const char* command)
 		time += inc;
 
 		if (time > 200) time -= 30;
-		else if (time > 100) time -= 25;
-		else if (time > 50) time -= 20;
-		else if (time > 25) time -= 10;
-		else if (time > 10) time -= 5;
-		else if (time > 5) time -= 3;
+		else if (time > 100) time -= 26;
+		else if (time > 50) time -= 22;
+		else if (time > 25) time -= 18;
+		else if (time > 10) time -= 7;
+		else if (time > 5) time -= 5;
 		else if (time > 1) time -= 1;
 		else time = 0;
 
@@ -4677,9 +4737,16 @@ void parse_go(const char* command)
 		depth = MAX_PLY;
 
 	// print debug info
-	printf("Time:%llu Start:%llu Stop:%llu Depth:%d Time-set:%s MovesToGo:%d \n",
+	printf("Time:%llu Start:%llu Stop:%llu Depth:%d Time-set:%s MovesToGo:%d",
 		time, start_time, stop_time, depth, (time_set ? "True" : "False"), moves_to_go);
 
+	
+	std::cout << std::endl;
+	fflush(stdout);
+	
+	
+	
+	
 	// search position
 	search_position(depth);
 }
@@ -4712,7 +4779,8 @@ void uci_loop()
 	printf("CrusherChess %s ", VERSION);
 	printf("by Hanno Kruger\n");
 	printf("uciok\n");
-
+	fflush(stdout);
+	
 	//uci loop
 	while (1)
 	{
@@ -4782,6 +4850,8 @@ void uci_loop()
 			print_board();
 		else
 			printf("Unknown command\n");
+
+		fflush(stdin);
 	}
 }
 
@@ -4795,9 +4865,18 @@ void uci_loop()
 
 
 int main()
-{   //use %ls for wchar
+{ 
+	setvbuf(stdout, NULL, _IONBF, 0);
+	
+	std::cout.setf(std::ios_base::unitbuf);
+
+	//use %ls for wchar
 
 	//need to fix score imbalance with mirror table eroor in this position "1k6/8/8/8/8/8/8/6K1 w - - 0 1"
+
+	//bugs:
+	//lose on time
+	//null move from pv, is this fixed now?
 
 	init_all();
 
