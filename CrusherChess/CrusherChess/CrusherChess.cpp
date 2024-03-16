@@ -9,18 +9,18 @@
 #include <iostream>
 #include <cassert>
 #include <string>
-#include <fcntl.h>
+//#include <fcntl.h>
 #include <io.h>
 #include <map>
 #include <chrono>
 #include <wtypes.h>
 #include <vector>
 #include <ostream>
-#include <consoleapi2.h>
+//#include <consoleapi2.h>
 #include <assert.h>
 #include <set>
 
-const char* VERSION = "1.3";
+const char* VERSION = "1.3.1";
 #define MAX_HASH 32768
 
 class TextAttr
@@ -982,19 +982,30 @@ void print_magic_numbers()
 }
 
 //for uci
-void print_move(int move)
+std::string print_move(int move)
 {
 	if (get_move_promoted(move))
-		printf("%s%s%c",
+		return std::format("{}{}{}",
 			square_to_coordinates[get_move_source(move)],
 			square_to_coordinates[get_move_target(move)],
-			promoted_pieces[get_move_promoted(move)]
-		);
+			promoted_pieces[get_move_promoted(move)]);
+
+	/*printf("%s%s%c",
+		square_to_coordinates[get_move_source(move)],
+		square_to_coordinates[get_move_target(move)],
+		promoted_pieces[get_move_promoted(move)]
+	);*/
 	else
-		printf("%s%s",
+		return std::format("{}{}",
+			square_to_coordinates[get_move_source(move)],
+			square_to_coordinates[get_move_target(move)]);
+
+		
+		/*printf("%s%s",
 			square_to_coordinates[get_move_source(move)],
 			square_to_coordinates[get_move_target(move)]
-		);
+		);*/
+	
 }
 
 void print_move_list(Moves* move_list)
@@ -2660,7 +2671,7 @@ void read_input()
 			// read bytes from STDIN
 			bytes = _read(_fileno(stdin), input, 256);
 		}
-		while (bytes < 0);// until bytes available
+		while (bytes < 0);//read until bytes available then break
 
 		// searches for the first occurrence of '\n'
 		endc = strchr(input, '\n');
@@ -4118,7 +4129,6 @@ static inline int negamax(int alpha, int beta, int depth)
 	if ((nodes & LISTEN) == 0)
 		communicate();
 
-	
 
 	if (depth == 0)
 		//run quisuince
@@ -4213,7 +4223,6 @@ static inline int negamax(int alpha, int beta, int depth)
 			continue;
 		}
 		legal_count++;
-
 
 
 		//LMR
