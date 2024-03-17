@@ -1,4 +1,5 @@
 ﻿#define _CRT_SECURE_NO_WARNINGS
+//#define DEBUG
 
 //includes
 #pragma region 
@@ -929,7 +930,7 @@ void parse_fen(const char* fen)
 			case  'k': castle |= BK; break;
 			case  'q': castle |= BQ; break;
 			case  '-': break;
-			default: printf("fen string in inccorect format!"); break;
+            default: std::cout << ("fen string in inccorect format!") << std::endl; break;
 			}
 		}
 	}
@@ -984,30 +985,17 @@ void print_magic_numbers()
 }
 
 //for uci
-std::string print_move(int move)
+std::string get_move_string(int move)
 {
 	if (get_move_promoted(move))
 		return std::format("{}{}{}",
 			square_to_coordinates[get_move_source(move)],
 			square_to_coordinates[get_move_target(move)],
 			promoted_pieces[get_move_promoted(move)]);
-
-	/*printf("%s%s%c",
-		square_to_coordinates[get_move_source(move)],
-		square_to_coordinates[get_move_target(move)],
-		promoted_pieces[get_move_promoted(move)]
-	);*/
 	else
 		return std::format("{}{}",
 			square_to_coordinates[get_move_source(move)],
 			square_to_coordinates[get_move_target(move)]);
-
-		
-		/*printf("%s%s",
-			square_to_coordinates[get_move_source(move)],
-			square_to_coordinates[get_move_target(move)]
-		);*/
-	
 }
 
 void print_move_list(Moves* move_list)
@@ -1058,11 +1046,10 @@ void test_move_encoding()
 
 void print_moves_scores(Moves* moves)
 {
-	printf("move scores: \n");
+	std::cout << "move scores:" << std::endl;
 	for (int i = 0; i < moves->count; i++)
 	{
-		print_move(moves->moves[i]);
-		printf(" score: %d\n", score_move(moves->moves[i]));
+        std::cout << get_move_string(moves->moves[i]) << " score: " << score_move(moves->moves[i]) << std::endl;
 	}
 }
 
@@ -2437,7 +2424,7 @@ static inline int make_move(int move)
 	{
 		printf("Make move\n");
 		printf("move: ");
-		print_move(move);
+		std::cout << get_move_string(move) << std::endl;
 		print_board();
 
 		printf("hash sould be: %llx\n", hash_from_scratch);
@@ -2560,8 +2547,6 @@ void perft_test(int depth)
 				//print_board();
 			//}
 
-
-
 			U64 cumulative_nodes = nodes;
 
 			// call perft driver recursively
@@ -2572,12 +2557,11 @@ void perft_test(int depth)
 			// take back
 			take_back();
 
-			printf("%s%s%c  nodes: %llu\n",
-				square_to_coordinates[get_move_source(move)],
-				square_to_coordinates[get_move_target(move)],
-				promoted_pieces[get_move_promoted(move)],
-				current_nodes
-			);
+            std::cout <<
+            square_to_coordinates[get_move_source(move)] <<
+            square_to_coordinates[get_move_target(move)] <<
+            promoted_pieces[get_move_promoted(move)] <<
+            "  nodes: " << current_nodes << std::endl;
 		}
 	}
 	else nodes++;
@@ -2956,12 +2940,11 @@ int Mget_best_move(int depth)
 			}
 
 			int eval = MMiniMax(depth - 1, false);
-			printf("no%d  score: %d  move:", (i + 1), eval);
-			print_move(moves->moves[i]);
-			printf("\n");
+
+            std::cout << "no" << (i + 1) << "  score: " << eval << "  move:";
+			std::cout << get_move_string(moves->moves[i]) << std::endl;
 
 			take_back();
-
 
 			if (eval >= bestScore)
 			{
@@ -2993,10 +2976,7 @@ int Mget_best_move(int depth)
 
 			int eval = MMiniMax(depth - 1, true);
 			printf("no%d  score: %d  move:", (i + 1), eval);
-			print_move(moves->moves[i]);
-			printf("\n");
-
-
+			std::cout << get_move_string(moves->moves[i]) << std::endl;
 
 			take_back();
 
@@ -3006,7 +2986,7 @@ int Mget_best_move(int depth)
 					bestmoves.push_back(moves->moves[i]);
 				else
 				{
-					printf("black new eval:%d\n", eval);
+                    std::cout << "black new eval:" << eval << std::endl;
 
 					bestmoves.clear();
 					bestmoves.push_back(moves->moves[i]);
@@ -3015,22 +2995,16 @@ int Mget_best_move(int depth)
 			}
 		}
 	}
-	//printf("size: %d\n", bestmoves.size());
-
-	//printf("rand index: %d\n",(rand() % bestmoves.size()));
-
 	return bestmoves[rand() % bestmoves.size()];
 }
 
 void Msearch_position(int depth)
 {
 	printf("depth:%d\n", depth);
-	//printf("bestmove d2d4\n");
 
 	int best = Mget_best_move(depth);
 
-	printf("bestmove ");
-	print_move(best);
+    std::cout << "bestmove " << get_move_string(best);
 }
 
 #pragma endregion
@@ -3701,9 +3675,9 @@ void init_hash_table(int mb)
 
 	// free hash table if not empty
 	if (hash_table != nullptr)
-	{
-		printf("Clearing hash memory...\n");
-		// free hash table dynamic memory
+    {
+        std::cout << "Clearing hash memory..." << std::endl;
+
 		free(hash_table);
 	}
 
@@ -3713,7 +3687,7 @@ void init_hash_table(int mb)
 	// if allocation has failed
 	if (hash_table == nullptr)
 	{
-		printf("Couldn't allocate memory for hash table, trying %dMB...", mb / 2);
+        std::cout << "Couldn't allocate memory for hash table, trying " << mb / 2 << "MB... " << std::endl;
 
 		// try to allocate with half size
 		init_hash_table(mb / 2);
@@ -3723,7 +3697,7 @@ void init_hash_table(int mb)
 	{
 		// clear hash table
 		clear_hash_table();
-		printf("Hash table is initialized with %llu entries\n", hash_entries);
+        std::cout << "Hash table is initialized with " << hash_entries << " entries" << std::endl;
 	}
 }
 
@@ -3931,7 +3905,7 @@ static inline int score_move(int move)
 			score_pv = FALSE;
 
 			//printf("PV move: ");
-			//print_move(move);
+            //std::cout << get_move_string(move);
 			//printf(" ply: %d\n", ply);
 
 			//score PV move to search first
@@ -4402,24 +4376,25 @@ void search_position(int depth)
 		previous_best = pv_table[0][0];
 
 		//send info to gui
-		printf("info ");
+		std::cout << "info ";
 
 		if (score > -mate_value && score < -mate_score)
-			printf("score mate %d ", -(score + mate_value) / 2);
+            std::cout << "score mate " << -(score + mate_value) / 2;
 		else if (score > mate_score && score < mate_value)
-			printf("score mate %d ", (mate_value - score) / 2);
+            std::cout << "score mate " << (mate_value - score) / 2;
 		else
-			printf("score cp %d ", score);
+            std::cout << "score cp " << score;
 
-		printf("depth %d nodes %llu time %llu pv ", current_depth, nodes, (GetTickCount64() - start_time));
+        std::cout <<
+        " depth " <<current_depth <<
+        " nodes " << nodes <<
+        " time " << (GetTickCount64() - start_time) <<
+        " pv ";
 
 		//loop over pv line
 		for (int i = 0; i < pv_length[0]; i++)
-		{
-			print_move(pv_table[0][i]);
-			printf(" ");
-		}
-		printf("\n");
+            std::cout << get_move_string(pv_table[0][i]) << " ";
+		std::cout << std::endl;
 
 		if (time_set && GetTickCount64() + 4 > stop_time)
 		{
@@ -4432,16 +4407,7 @@ void search_position(int depth)
 
 			break;
 		}
-		//fflush(stdout);
-							
 	}
-	
-	//make sure gui can see move as newline
-	fflush(stdout);
-
-	//std::cout << std::endl;
-
-
 
 	//waist some time to ensure move gets to gui	
 	U64 iters = 10000000;
@@ -4455,20 +4421,18 @@ void search_position(int depth)
 	
 	std::string m = "";
 	m += "bestmove ";
-	//printf("bestmove ");
 	//if the search was stopped and we have a previous best move
 	if (stopped && previous_best)
-		m += print_move(previous_best);
+		m += get_move_string(previous_best);
 	//else if the search was not stopped or we dont have a previous best move return current
 	else
-		m += print_move(pv_table[0][0]);
+		m += get_move_string(pv_table[0][0]);
 
 	std::cout << m << std::endl;
 	
 	
 	//waist some time to ensure move gets to gui	
 	iters = 10000000;
-	
 
 	//auto start = std::chrono::system_clock::now();
 
@@ -4476,19 +4440,6 @@ void search_position(int depth)
 		sink = 0;
 	} while (--iters > 0);
 	(void)sink;
-
-	//auto end = std::chrono::system_clock::now();
-	//auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-	//std::cout << elapsed << '\n';
-	
-	
-	
-	
-	//printf("\n");
-	//std::cout << std::endl;
-	
-	//propably not nessecary
-	fflush(stdout);
 }
 
 #pragma endregion
@@ -4737,16 +4688,15 @@ void parse_go(const char* command)
 		depth = MAX_PLY;
 
 	// print debug info
-	printf("Time:%llu Start:%llu Stop:%llu Depth:%d Time-set:%s MovesToGo:%d",
-		time, start_time, stop_time, depth, (time_set ? "True" : "False"), moves_to_go);
+    std::cout <<
+    "Time:" << time <<
+    " Start:" << start_time <<
+    " Stop:" << stop_time <<
+    " Depth:" << depth <<
+    " Time-set:" << (time_set ? "True" : "False") <<
+    " MovesToGo:" << moves_to_go <<
+    std::endl;
 
-	
-	std::cout << std::endl;
-	fflush(stdout);
-	
-	
-	
-	
 	// search position
 	search_position(depth);
 }
@@ -4776,19 +4726,17 @@ void uci_loop()
 	char input[size];
 
 	//engine info
-	printf("CrusherChess %s ", VERSION);
-	printf("by Hanno Kruger\n");
-	printf("uciok\n");
-	fflush(stdout);
-	
+    std::cout << "CrusherChess " << VERSION << " by Hanno Kruger" << std::endl;
+    std::cout << "uciok" << std::endl;
+
 	//uci loop
-	while (1)
+	while (true)
 	{
 		//reset input
 		memset(input, 0, sizeof(input));
 
 		//make sure output reaches gui
-		fflush(stdout);
+		//fflush(stdout);
 
 		//skip loop cycle while nothing in stdin else populate input
 		if (!fgets(input, size, stdin)) continue;
@@ -4799,7 +4747,7 @@ void uci_loop()
 		//UCI isready
 		if (strncmp(input, "isready", 7) == 0)
 		{
-			printf("readyok\n");
+            std::cout << "readyok" << std::endl;
 			continue;
 		}
 		//UCI position		 
@@ -4825,11 +4773,10 @@ void uci_loop()
 		//greetings
 		else if (strncmp(input, "uci", 3) == 0)
 		{
-			//engine info
-			printf("id name CrusherChess %s\n",VERSION);
-			printf("id author Hanno Kruger\n");
-			printf("option name Hash type spin default 64 min 1 max %d\n", MAX_HASH);
-			printf("uciok\n");
+            std::cout << "id name CrusherChess " << VERSION << std::endl;
+            std::cout << "id author Hanno Kruger" << std::endl;
+            std::cout << "option name Hash type spin default 64 min 1 max " << MAX_HASH << std::endl;
+            std::cout << "uciok" << std::endl;
 		}
 		else if (!strncmp(input, "setoption name Hash value ", 26))
 		{
@@ -4843,13 +4790,13 @@ void uci_loop()
 			if (mb > MAX_HASH) mb = MAX_HASH;
 
 			// set hash table size in MB
-			printf("Set hash table size to %dMB\n", mb);
+            std::cout << "Set hash table size to " << mb << "MB" << std::endl;
 			init_hash_table(mb);
 		}
 		else if (input[0] == 'd')
 			print_board();
 		else
-			printf("Unknown command\n");
+			std::cout <<"Unknown command" << std::endl;
 
 		fflush(stdin);
 	}
@@ -4866,9 +4813,8 @@ void uci_loop()
 
 int main()
 { 
-	setvbuf(stdout, NULL, _IONBF, 0);
-	
-	std::cout.setf(std::ios_base::unitbuf);
+	//setvbuf(stdout, NULL, _IONBF, 0);
+	//std::cout.setf(std::ios_base::unitbuf);
 
 	//use %ls for wchar
 
@@ -4880,10 +4826,7 @@ int main()
 
 	init_all();
 
-	int debug = 0;
-
-	if (debug)
-	{
+#ifdef DEBUG
 		//tricky
 		parse_fen("r3k2r/p1ppqpb1/1n2pnp1/3PN3/1p2P3/2N2Q1p/PPPB1PPP/R3K2R w KQkq - 0 1 ");
 		//parse_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 ");
@@ -4964,12 +4907,10 @@ int main()
 		//getchar();
 
 		std::wcin.get();
-	}
-	else
+#else
 		uci_loop();
+#endif
 
-
-	
 	free(hash_table);
 	return 0;
 }
