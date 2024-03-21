@@ -1,7 +1,7 @@
 CrusherChess/.vs/
 CrusherChess/x64/
-CrusherChess/CrusherChess/Release/
-CrusherChess/CrusherChess/x64/
+CrusherChess/src/Release/
+CrusherChess/src/x64/
 
 # User-specific stuff
 .idea/**/workspace.xml

@@ -18,11 +18,11 @@ if(CMAKE_BUILD_TYPE MATCHES Release)
 endif()
 
 
-add_executable(CrusherChessLinux
-        CrusherChess/LinuxBuild/CrusherChess.cpp)
-
 add_executable(CrusherChess
-        CrusherChess/CrusherChess/CrusherChess.cpp)
+        CrusherChess/src/CrusherChess.cpp
+        CrusherChess/src/Debug.cpp
+        CrusherChess/src/types.h
+        CrusherChess/src/macros.h)
 
 add_executable(TestExecutable
-        CrusherChess/test.cpp)
+        CrusherChess/tests/test.cpp)

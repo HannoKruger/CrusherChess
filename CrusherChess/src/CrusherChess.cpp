@@ -1,7 +1,9 @@
-﻿//includes
+﻿#define _CRT_SECURE_NO_WARNINGS
+//#define DEBUG
+
+//includes
 #pragma region 
 
-#pragma once
 
 #define NOMINMAX
 
@@ -9,16 +11,23 @@
 #include <iostream>
 #include <cassert>
 #include <string>
-#include <fcntl.h>
 #include <io.h>
 #include <map>
 #include <chrono>
 #include <wtypes.h>
 #include <vector>
 #include <ostream>
-#include <consoleapi2.h>
-#include <assert.h>
-#include <set>
+
+#include "types.h"
+
+template <typename CharT, typename Traits>
+inline std::basic_ostream<CharT, Traits>& custom_endl(std::basic_ostream<CharT, Traits>& os) {
+    return std::cout << std::endl;
+}
+
+
+const char* VERSION = "1.3.1";
+#define MAX_HASH 32768
 
 class TextAttr
 {
@@ -37,25 +46,9 @@ private:
 #define BACKGROUND_WHITE (BACKGROUND_RED | BACKGROUND_GREEN | BACKGROUND_BLUE)
 
 
-
-typedef unsigned long long U64;
-//move list
-typedef struct Moves
-{
-	int moves[255];
-	//could possibily use this?
-	//std::size(data);
-
-   // int legal[255];
-
-	//move count
-	int count;
-
-} Moves;
-
 // FEN dedug positions
-#define empty_board "8/8/8/8/8/8/8/8 b - - "                       
-#define start_position "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 "                    
+#define empty_board "8/8/8/8/8/8/8/8 b - - "                      
+#define start_position "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 "
 #define tricky_position "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 "
 constexpr auto killer_position = "rnbqkb1r/pp1p1pPp/8/2p1pP2/1P1P4/3P3P/P1P1P3/RNBQKBNR w KQkq e6 0 1";
 #define cmk_position "r2q1rk1/ppp2ppp/2n1bn2/2b1p3/3pP3/3P1NPP/PPP1NPB1/R1BQ1RK1 b - - 0 9 "
@@ -82,6 +75,7 @@ U64 mask_rook_attacks(int square);
 U64 bishop_blocker_attacks(int square, U64 block);
 U64 rook_blocker_attacks(int square, U64 block);
 void init_leapers_attacks();
+void init_hash_table(int mb);
 void init_all();
 
 static inline unsigned int randu32();
@@ -103,59 +97,7 @@ void clear_hash_table();
 
 //void search_position(int depth);
 #pragma endregion
-/****************************************\
- ========================================
-				  Enums
- ========================================
-\****************************************/
-#pragma region
-//piece cords
-enum Square : int
-{
-	a8, b8, c8, d8, e8, f8, g8, h8,
-	a7, b7, c7, d7, e7, f7, g7, h7,
-	a6, b6, c6, d6, e6, f6, g6, h6,
-	a5, b5, c5, d5, e5, f5, g5, h5,
-	a4, b4, c4, d4, e4, f4, g4, h4,
-	a3, b3, c3, d3, e3, f3, g3, h3,
-	a2, b2, c2, d2, e2, f2, g2, h2,
-	a1, b1, c1, d1, e1, f1, g1, h1,
 
-	SQUARE_NB, NO_SQ
-};
-
-//enum Square : int
-//{
-//    SQ_A1, SQ_B1, SQ_C1, SQ_D1, SQ_E1, SQ_F1, SQ_G1, SQ_H1,
-//    SQ_A2, SQ_B2, SQ_C2, SQ_D2, SQ_E2, SQ_F2, SQ_G2, SQ_H2,
-//    SQ_A3, SQ_B3, SQ_C3, SQ_D3, SQ_E3, SQ_F3, SQ_G3, SQ_H3,
-//    SQ_A4, SQ_B4, SQ_C4, SQ_D4, SQ_E4, SQ_F4, SQ_G4, SQ_H4,
-//    SQ_A5, SQ_B5, SQ_C5, SQ_D5, SQ_E5, SQ_F5, SQ_G5, SQ_H5,
-//    SQ_A6, SQ_B6, SQ_C6, SQ_D6, SQ_E6, SQ_F6, SQ_G6, SQ_H6,
-//    SQ_A7, SQ_B7, SQ_C7, SQ_D7, SQ_E7, SQ_F7, SQ_G7, SQ_H7,
-//    SQ_A8, SQ_B8, SQ_C8, SQ_D8, SQ_E8, SQ_F8, SQ_G8, SQ_H8,
-//    SQ_NONE,
-//
-//    SQUARE_ZERO = 0,
-//    SQUARE_NB = 64
-//};
-
-//clors
-enum Colors { WHITE, BLACK, BOTH };
-
-// piece types
-enum PieceTypes { PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING };
-
-//castling rights represented in 4 bits
-enum Castling { WK = 1, WQ = 2, BK = 4, BQ = 8 };
-
-// encode pieces
-enum Pieces { P, N, B, R, Q, K, p, n, b, r, q, k };
-//globals
-enum { COLOR_NB = 2 };
-
-
-#pragma endregion
 /****************************************\
  ========================================
 			  Bit operations
@@ -221,14 +163,13 @@ static inline int count_bits(U64 num)//fast
 }
 
 
-static inline int get_lsb_index(U64 num)//can be sped up
+static inline int get_lsb_index(U64 num)
 {
 	//-num = (0 - num) = (~num + 1ULL) -> flip bits & add one
 
-	if (num)
-		return count_bits((num & (0 - num)) - 1);
-	else
-		return -1;//return illegal index
+	assert(num != 0ULL);
+	
+	return count_bits((num & (0 - num)) - 1);	
 }
 #pragma endregion
 /****************************************\
@@ -241,11 +182,13 @@ static inline int get_lsb_index(U64 num)//can be sped up
 const char* ascii_pieces = "PNBRQKpnbrqk";
 
 // unicode pieces
-//const wchar_t* unicode_pieces[12] = { L"♙", L"♘", L"♗", L"♖", L"♕", L"♔", L"♟︎", L"♞", L"♝", L"♜", L"♛", L"♚" };
+// wchar_t* unicode_pieces[12] = { L"♙", L"♘", L"♗", L"♖", L"♕", L"♔", L"♟︎", L"♞", L"♝", L"♜", L"♛", L"♚" };
 //unicode piece with code point
 // unicode pieces
 //\u265A
-const wchar_t* unicode_pieces[12] = { L"\u265F", L"\u265E", L"\u265D", L"\u265C", L"\u265B", L"\u265A",  L"\u2659", L"\u2658", L"\u2657", L"\u2656",L"\u2655", L"\u2654" };
+
+//FE0E is a variation selector-15, it forces the black and white pieces to be displayed as text, not as emoji
+const wchar_t* unicode_pieces[12] = { L"\u265F\uFE0E", L"\u265E\uFE0E", L"\u265D\uFE0E", L"\u265C\uFE0E", L"\u265B\uFE0E", L"\u265A\uFE0E",  L"\u2659\uFE0E", L"\u2658\uFE0E", L"\u2657\uFE0E", L"\u2656\uFE0E",L"\u2655\uFE0E", L"\u2654\uFE0E" };
 
 
 //convert ascii character pieces to constants
@@ -282,6 +225,8 @@ std::map <int, char> promoted_pieces =
 	{b,'b'},
 	{n,'n'},
 };
+
+const int piece_to_type[12] = { PAWN,KNIGHT,BISHOP,ROOK,QUEEN,KING,PAWN,KNIGHT,BISHOP,ROOK,QUEEN,KING };
 
 const U64 not_a_file = 18374403900871474942ULL;
 const U64 not_h_file = 9187201950435737471ULL;
@@ -655,53 +600,6 @@ int get_piece(int file, int rank)
 	return piece;
 }
 
-std::string get_fen_Stocfish_Version_not_working()
-{
-	int emptyCnt;
-	std::ostringstream ss;
-
-	const std::string PieceToChar("pnbrqkPNBRQK");
-
-	for (int r = 7; r >= 0; --r)
-	{
-		for (int f = 0; f <= 7; ++f)
-		{
-			for (emptyCnt = 0; f <= 7 && (get_piece(f, r) == -1); ++f)
-				++emptyCnt;
-
-			if (emptyCnt)
-				ss << emptyCnt;
-
-			if (f <= 7)
-			{
-				int piece = get_piece(f, r);
-
-				if (piece != -1)
-					ss << PieceToChar[piece];
-				else
-					ss << ' ';
-			}
-		}
-
-		if (r > 0)
-			ss << '/';
-	}
-
-	ss << (side == WHITE ? " w " : " b ");
-
-	if (castle & 1)		ss << 'K';
-	if (castle & 2)		ss << 'Q';
-	if (castle & 4)		ss << 'k';
-	if (castle & 8)		ss << 'q';
-	if (!(castle & 15))	ss << '-';
-
-	ss << (enpassant == NO_SQ ? " - " : " " + std::string(square_to_coordinates[enpassant]) + " ");
-
-	//need to add half and full move counters
-
-	return ss.str();
-}
-
 std::string get_fen()
 {
 	std::ostringstream ss;
@@ -806,9 +704,9 @@ void print_board(bool ascii = false)
 
 					//WriteConsoleW(handle, unicode_pieces[piece], 1, &written, NULL);
 
-					if (piece == P)
-						WriteConsoleW(handle, unicode_pieces[piece], 1, &written, NULL);
-					else
+//					if (piece == P)
+//						WriteConsoleW(handle, unicode_pieces[piece], 1, &written, NULL);
+//					else
 					{
 						WriteConsoleW(handle, unicode_pieces[piece], 1, &written, NULL);
 						WriteConsoleW(handle, L" ", 1, &written, NULL);
@@ -834,23 +732,9 @@ void print_board(bool ascii = false)
 		(castle & BQ) ? 'q' : '-'
 	);
 
-	std::cout << "Fen: " << get_fen() << std::endl;
+	std::cout << "Fen: " << get_fen() << custom_endl;
 
 	printf("Key: %llx\n\n", hash_key);
-}
-
-void print_attacked_squares(int side)
-{
-	for (int rank = 0, square = 0; rank < 8; ++rank)
-	{
-		printf("%d ", 8 - rank);
-		for (int file = 0; file < 8; ++file, ++square)
-		{
-			printf("%d ", is_square_attacked(square, side) ? 1 : 0);
-		}
-		printf("\n");
-	}
-	printf("  a b c d e f g h");
 }
 
 void parse_fen(const char* fen)
@@ -922,7 +806,7 @@ void parse_fen(const char* fen)
 			case  'k': castle |= BK; break;
 			case  'q': castle |= BQ; break;
 			case  '-': break;
-			default: printf("fen string in inccorect format!"); break;
+            default: std::cout << ("fen string in inccorect format!") << custom_endl; break;
 			}
 		}
 	}
@@ -965,87 +849,18 @@ void parse_fen(const char* fen)
 
 }
 
-void print_magic_numbers()
-{
-	printf("Rook:\n");
-	for (int square = 0; square < SQUARE_NB; square++)
-		printf(" 0x%llxULL,\n", rook_magic_numbers[square]);
-
-	printf("\n\nBishop:\n");
-	for (int square = 0; square < SQUARE_NB; square++)
-		printf(" 0x%llxULL,\n", bishop_magic_numbers[square]);
-}
-
 //for uci
-void print_move(int move)
+std::string get_move_string(int move)
 {
 	if (get_move_promoted(move))
-		printf("%s%s%c",
+		return std::format("{}{}{}",
 			square_to_coordinates[get_move_source(move)],
 			square_to_coordinates[get_move_target(move)],
-			promoted_pieces[get_move_promoted(move)]
-		);
+			promoted_pieces[get_move_promoted(move)]);
 	else
-		printf("%s%s",
+		return std::format("{}{}",
 			square_to_coordinates[get_move_source(move)],
-			square_to_coordinates[get_move_target(move)]
-		);
-}
-
-void print_move_list(Moves* move_list)
-{
-	// do nothing on empty move list
-	if (!move_list->count)
-	{
-		printf("No move in the moves list!\n");
-		return;
-	}
-
-	printf("move   piece    capture  double  enpass  castling\n\n");
-
-	// loop over moves within a move list
-	for (int move_count = 0; move_count < move_list->count; move_count++)
-	{
-		// init move
-		int move = move_list->moves[move_count];
-
-		// print move
-		printf("%s%s%c    %c        %d        %d       %d       %d\n", square_to_coordinates[get_move_source(move)],
-			square_to_coordinates[get_move_target(move)],
-			get_move_promoted(move) ? ascii_pieces[get_move_promoted(move)] : ' ',
-			ascii_pieces[get_move_piece(move)],
-			get_move_capture(move) ? 1 : 0,
-			get_move_double(move) ? 1 : 0,
-			get_move_enpassant(move) ? 1 : 0,
-			get_move_castling(move) ? 1 : 0);
-	}
-	// print total number of moves
-	printf("\nTotal number of moves: %d\n\n", move_list->count);
-}
-
-void test_move_encoding()
-{
-	int move = encode_move(e2, e4, K, Q, 1, 1, 1, 1);
-
-	printf("src square:%s\n", square_to_coordinates[get_move_source(move)]);
-	printf("target square:%s\n", square_to_coordinates[get_move_target(move)]);
-	printf("Piece:%c\n", ascii_pieces[get_move_piece(move)]);
-	printf("Promoted:%c\n", ascii_pieces[get_move_promoted(move)]);
-
-	printf("Capture:%s\n", (get_move_capture(move) ? "1" : "0"));
-	printf("double:%s\n", (get_move_double(move) ? "1" : "0"));
-	printf("enpassant:%s\n", (get_move_enpassant(move) ? "1" : "0"));
-	printf("Castle:%s\n", (get_move_castling(move) ? "1" : "0"));
-}
-
-void print_moves_scores(Moves* moves)
-{
-	printf("move scores: \n");
-	for (int i = 0; i < moves->count; i++)
-	{
-		print_move(moves->moves[i]);
-		printf(" score: %d\n", score_move(moves->moves[i]));
-	}
+			square_to_coordinates[get_move_target(move)]);
 }
 
 #pragma endregion
@@ -1357,8 +1172,8 @@ void init_all()
 	init_sliders_attacks(ROOK);
 	init_random_keys();
 	init_evaluation_masks();
-
-	clear_hash_table();
+	//init hash table with default 64mb
+	init_hash_table(64);
 
 	parse_fen(start_position);
 }
@@ -1496,7 +1311,7 @@ void init_magic_numbers()
 		 bishop_magic_numbers[square] = find_magic_number(square, bishop_relevant_bits[square], bishop);*/
 }
 
-void init_sliders_attacks(int bishop)
+void init_sliders_attacks(int piece)
 {
 	for (int square = 0; square < 64; square++)
 	{
@@ -1505,7 +1320,7 @@ void init_sliders_attacks(int bishop)
 		rook_masks[square] = mask_rook_attacks(square);
 
 		//init current mask
-		U64 attack_mask = bishop ? bishop_masks[square] : rook_masks[square];
+		U64 attack_mask = (piece == BISHOP) ? bishop_masks[square] : rook_masks[square];
 
 		//init occupancy bit count
 		int relevant_bits_count = count_bits(attack_mask);
@@ -1516,7 +1331,7 @@ void init_sliders_attacks(int bishop)
 		//loop over occupancy
 		for (int i = 0; i < occupancy_indicies; i++)
 		{
-			if (bishop == BISHOP)
+			if (piece == BISHOP)
 			{
 				//init current occupoancy
 				U64 occupancy = set_occupancy(i, relevant_bits_count, attack_mask);
@@ -2419,7 +2234,7 @@ static inline int make_move(int move)
 	{
 		printf("Make move\n");
 		printf("move: ");
-		print_move(move);
+		std::cout << get_move_string(move) << custom_endl;
 		print_board();
 
 		printf("hash sould be: %llx\n", hash_from_scratch);
@@ -2492,7 +2307,7 @@ static inline void perft_driver(int depth)
 		//else
 		//{
 			//collisions.push_back(hash_key);
-			//std::cout << "Collision! " << "length:" << keys.size() << std::endl;
+			//std::cout << "Collision! " << "length:" << keys.size() << custom_endl;
 
 			//print_board();
 		//}
@@ -2536,13 +2351,11 @@ void perft_test(int depth)
 			//}
 			//else
 			//{
-				//std::cout << "Collision! " << "length:" << keys.size() << std::endl;
+				//std::cout << "Collision! " << "length:" << keys.size() << custom_endl;
 			//	collisions.push_back(hash_key);
 
 				//print_board();
 			//}
-
-
 
 			U64 cumulative_nodes = nodes;
 
@@ -2554,12 +2367,11 @@ void perft_test(int depth)
 			// take back
 			take_back();
 
-			printf("%s%s%c  nodes: %llu\n",
-				square_to_coordinates[get_move_source(move)],
-				square_to_coordinates[get_move_target(move)],
-				promoted_pieces[get_move_promoted(move)],
-				current_nodes
-			);
+            std::cout <<
+            square_to_coordinates[get_move_source(move)] <<
+            square_to_coordinates[get_move_target(move)] <<
+            promoted_pieces[get_move_promoted(move)] <<
+            "  nodes: " << current_nodes << custom_endl;
 		}
 	}
 	else nodes++;
@@ -2605,6 +2417,9 @@ U64 stop_time = 0ULL;//uci stoptime command
 int input_waiting()
 {
 	//must be windows
+
+	//linux
+	return 0;
 
 	static int init = 0, pipe;
 	static HANDLE inh;
@@ -2655,7 +2470,7 @@ void read_input()
 			// read bytes from STDIN
 			bytes = _read(_fileno(stdin), input, 256);
 		}
-		while (bytes < 0);// until bytes available
+		while (bytes < 0);//read until bytes available then break
 
 		// searches for the first occurrence of '\n'
 		endc = strchr(input, '\n');
@@ -2666,19 +2481,19 @@ void read_input()
 		// if input is available
 		if (strlen(input) > 0)
 		{
-			// match UCI "quit" command
-			if (!strncmp(input, "quit", 4))
+			// match UCI "quit" command //strncmp returns 0 if string are equal
+			if (!strncmp(input, "quit", 4) || !strncmp(input, "stop", 4))
 			{
 				// tell engine to terminate exacution    
 				quit = true;
 			}
 
-			// // match UCI "stop" command
-			else if (!strncmp(input, "stop", 4))
-			{
-				// tell engine to terminate exacution
-				quit = true;
-			}
+			
+			//else if (!strncmp(input, "stop", 4))
+			//{
+			//	// tell engine to terminate exacution
+			//	quit = true;
+			//}
 		}
 	}
 }
@@ -2700,7 +2515,7 @@ static void communicate()
 #pragma endregion
 /****************************************\
  ========================================
-				My Search
+			   Simple Search
  ========================================
 \****************************************/
 #pragma region
@@ -2935,12 +2750,11 @@ int Mget_best_move(int depth)
 			}
 
 			int eval = MMiniMax(depth - 1, false);
-			printf("no%d  score: %d  move:", (i + 1), eval);
-			print_move(moves->moves[i]);
-			printf("\n");
+
+            std::cout << "no" << (i + 1) << "  score: " << eval << "  move:";
+			std::cout << get_move_string(moves->moves[i]) << custom_endl;
 
 			take_back();
-
 
 			if (eval >= bestScore)
 			{
@@ -2972,10 +2786,7 @@ int Mget_best_move(int depth)
 
 			int eval = MMiniMax(depth - 1, true);
 			printf("no%d  score: %d  move:", (i + 1), eval);
-			print_move(moves->moves[i]);
-			printf("\n");
-
-
+			std::cout << get_move_string(moves->moves[i]) << custom_endl;
 
 			take_back();
 
@@ -2985,7 +2796,7 @@ int Mget_best_move(int depth)
 					bestmoves.push_back(moves->moves[i]);
 				else
 				{
-					printf("black new eval:%d\n", eval);
+                    std::cout << "black new eval:" << eval << custom_endl;
 
 					bestmoves.clear();
 					bestmoves.push_back(moves->moves[i]);
@@ -2994,22 +2805,16 @@ int Mget_best_move(int depth)
 			}
 		}
 	}
-	//printf("size: %d\n", bestmoves.size());
-
-	//printf("rand index: %d\n",(rand() % bestmoves.size()));
-
 	return bestmoves[rand() % bestmoves.size()];
 }
 
 void Msearch_position(int depth)
 {
 	printf("depth:%d\n", depth);
-	//printf("bestmove d2d4\n");
 
 	int best = Mget_best_move(depth);
 
-	printf("bestmove ");
-	print_move(best);
+    std::cout << "bestmove " << get_move_string(best);
 }
 
 #pragma endregion
@@ -3222,6 +3027,26 @@ const int mirror_square[SQUARE_NB] =
 	   a b c d e f g h       a b c d e f g h       a b c d e f g h        a b c d e f g h
 */
 
+
+
+//// file masks [square]
+//U64 file_masks[SQUARE_NB];
+//
+//// rank masks [square]
+//U64 rank_masks[SQUARE_NB];
+//
+//// isolated pawn masks [square]
+//U64 isolated_masks[SQUARE_NB];
+//
+//// white passed pawn masks [square]
+//U64 white_passed_masks[SQUARE_NB];
+//
+//// black passed pawn masks [square]
+//U64 black_passed_masks[SQUARE_NB];
+
+
+
+
 // extract rank from a square [square]
 const int get_rank[SQUARE_NB] =
 {
@@ -3235,23 +3060,39 @@ const int get_rank[SQUARE_NB] =
 	0, 0, 0, 0, 0, 0, 0, 0
 };
 
-// penalties
-const int double_pawn_penalty = -20;
-const int isolated_pawn_penalty = -10;
+// double pawns penalty
+const int double_pawn_penalty_opening = -5;
+const int double_pawn_penalty_endgame = -10;
+
+// isolated pawn penalty
+const int isolated_pawn_penalty_opening = -5;
+const int isolated_pawn_penalty_endgame = -10;
+
 // bonusses
 const int passed_pawn_bonus[8] = { 0, 10, 30, 50, 75, 100, 150, 200 };
-//file scores
+
+// semi open file score
 const int semi_open_file_score = 10;
+
+// open file score
 const int open_file_score = 15;
 
+// mobility units (values from engine Fruit reloaded)
+static const int bishop_unit = 4;
+static const int queen_unit = 9;
+
+// mobility bonuses (values from engine Fruit reloaded)
+static const int bishop_mobility_opening = 5;
+static const int bishop_mobility_endgame = 5;
+static const int queen_mobility_opening = 1;
+static const int queen_mobility_endgame = 2;
+
+// king's shield bonus
 const int king_shield_bonus = 5;
-const int mobility_bonus = 5;
+
 
 static inline int get_game_phase_score()
 {
-
-	//$(TargetPath)
-
 	/*
 		The game phase score of the game is derived from the pieces
 		(not counting pawns and kings) that are still on the board.
@@ -3270,7 +3111,7 @@ static inline int get_game_phase_score()
 	for (int piece = N; piece <= Q; piece++)
 		white_piece_scores += count_bits(bitboards[piece]) * material_score[OPENING][piece];
 
-	// loop over white pieces
+	// loop over black pieces
 	for (int piece = n; piece <= q; piece++)
 		black_piece_scores += count_bits(bitboards[piece]) * -material_score[OPENING][piece];
 
@@ -3278,15 +3119,41 @@ static inline int get_game_phase_score()
 	return white_piece_scores + black_piece_scores;
 }
 
+static inline int lerp_positional_score(int piece_type,int square,int game_phase_score)
+{
+	return
+		(
+		positional_score[OPENING][piece_type][square] * game_phase_score +
+		positional_score[ENDGAME][piece_type][square] * (opening_phase_score - game_phase_score)
+		) / opening_phase_score;
+}
+static inline int lerp_material_score(int piece, int game_phase_score)
+{
+	return
+		(material_score[OPENING][piece] * game_phase_score
+		+ material_score[ENDGAME][piece] * (opening_phase_score - game_phase_score)
+		) / opening_phase_score;
+}
+
+
+
 static inline int evaluate()
 {
-	int score = 0;
+	int game_phase_score = get_game_phase_score();
+	//printf("game phase score: %d\n", game_phase_score);
+	 
+
+	//static evaluation
+	int score = 0,opening_score = 0,endgame_score = 0;
 
 	//current pieces bitboard copy
 	U64 bitboard;
 
-	//init piece and score
+	//init piece and square
 	int piece, square;
+
+	//penalties
+	int double_pawns = 0;
 
 
 	for (int bb_piece = P; bb_piece <= k; bb_piece++)
@@ -3298,164 +3165,266 @@ static inline int evaluate()
 			piece = bb_piece;
 			square = get_lsb_index(bitboard);
 
-			//material score
-			//score += material_score[piece];
+			// get opening/endgame material score
+			opening_score += material_score[OPENING][piece];
+			endgame_score += material_score[ENDGAME][piece];
 
-			/*//positional score
+			if (piece < 6)//white
+			{
+				opening_score += positional_score[OPENING][piece][square];
+				endgame_score += positional_score[ENDGAME][piece][square];
+			}
+			else		 //black    //using -6 might be faster here
+			{
+				opening_score -= positional_score[OPENING][piece_to_type[piece]][mirror_square[square]];
+				endgame_score -= positional_score[ENDGAME][piece_to_type[piece]][mirror_square[square]];
+			}
+
+			
+		    /*old method:
+			//calculate the interpolated material score between opening and endgame
+			if (game_phase == MIDDELGAME)		
+				score += lerp_material_score(piece, game_phase_score);		
+			//material score
+			else
+				score += material_score[game_phase][piece];	
+
+
+			//calculate the interpolated positional score between opening and endgame
+			if (game_phase == MIDDELGAME)
+			{
+				if (piece < 6)//white
+					score += lerp_positional_score(piece, square, game_phase_score);
+				else		  //black	 //-6 might be faster here
+					score -= lerp_positional_score(piece_to_type[piece], mirror_square[square], game_phase_score);
+			}
+			// score material weights with pure scores in OPENING or ENDGAME
+			else
+			{
+				if (piece < 6)//white
+					score += positional_score[game_phase][piece][square];
+				else		  //black    //-6 might be faster here
+					score -= positional_score[game_phase][piece_to_type[piece]][mirror_square[square]];
+			}
+			*/
+
+
+			
+				
 			switch (piece)
 			{
-				//white
-			case P:
-			{
-				//positional
-				score += pawn_score[square];
+				//evaluate white pawns
+				case P:
+				
+					// double pawn penalty
+					double_pawns = count_bits(bitboards[P] & file_masks[square]);
 
-				//double pawn penalty
-				//-1 to prevent counting the first pawn as double	
-				int double_pawns = count_bits(bitboards[P] & file_masks[square]) - 1;
-				//add penalties for multiple pawns on lane
-				if (double_pawns > 0)
-					score += double_pawns * double_pawn_penalty;
+					// on double pawns (tripple, etc)
+					if (double_pawns > 1)
+					{
+						opening_score += (double_pawns - 1) * double_pawn_penalty_opening;
+						endgame_score += (double_pawns - 1) * double_pawn_penalty_endgame;
+					}
 
-				//isolated pawn penalty
-				if ((bitboards[P] & isolated_masks[square]) == 0)
-					score += isolated_pawn_penalty;
+					// on isolated pawn
+					if ((bitboards[P] & isolated_masks[square]) == 0)
+					{
+						// give an isolated pawn penalty
+						opening_score += isolated_pawn_penalty_opening;
+						endgame_score += isolated_pawn_penalty_endgame;
+					}
+					// on passed pawn
+					if ((passed_masks[WHITE][square] & bitboards[p]) == 0)
+					{
+						// give passed pawn bonus
+						opening_score += passed_pawn_bonus[get_rank[square]];
+						endgame_score += passed_pawn_bonus[get_rank[square]];
+					}
+					break;
+				//evaluate white knights
+				case N:
+				
+					break;
+				//evaluate white bishops
+				case B:
+					// mobility
+					opening_score += (count_bits(get_bishop_attacks(square, occupancies[BOTH])) - bishop_unit) * bishop_mobility_opening;
+					endgame_score += (count_bits(get_bishop_attacks(square, occupancies[BOTH])) - bishop_unit) * bishop_mobility_endgame;
+					break;
+				//evaluate white rooks
+				case R:
+					// semi open file
+					if ((bitboards[P] & file_masks[square]) == 0)
+					{
+						// add semi open file bonus
+						opening_score += semi_open_file_score;
+						endgame_score += semi_open_file_score;
+					}
 
-				//passed pawn bonus
-				if ((passed_masks[WHITE][square] & bitboards[p]) == 0)
-					score += passed_pawn_bonus[get_rank[square]];
+					// semi open file
+					if (((bitboards[P] | bitboards[p]) & file_masks[square]) == 0)
+					{
+						// add semi open file bonus
+						opening_score += open_file_score;
+						endgame_score += open_file_score;
+					}
+					break;
+				//evaluate white queens
+				case Q:
+					// mobility
+					opening_score += (count_bits(get_queen_attacks(square, occupancies[BOTH])) - queen_unit) * queen_mobility_opening;
+					endgame_score += (count_bits(get_queen_attacks(square, occupancies[BOTH])) - queen_unit) * queen_mobility_endgame;
+					break;
+				//evaluate white king
+				case K:
+					
+					// open file
+					if (((bitboards[P] | bitboards[p]) & file_masks[square]) == 0)
+					{
+						// add open file penalty
+						opening_score -= open_file_score;
+						endgame_score -= open_file_score;
+					}
+					// semi open file
+					else if ((bitboards[P] & file_masks[square]) == 0)
+					{
+						// add semi open file penalty
+						opening_score -= semi_open_file_score;
+						endgame_score -= semi_open_file_score;
+					}
 
+					// king safety bonus
+					opening_score += count_bits(king_attacks[square] & occupancies[WHITE]) * king_shield_bonus;
+					endgame_score += count_bits(king_attacks[square] & occupancies[WHITE]) * king_shield_bonus;
 
-				break;
+					break;
+				//evaluate black pawns
+				case p:
+					// double pawn penalty
+					double_pawns = count_bits(bitboards[p] & file_masks[square]);
+
+					// on double pawns (tripple, etc)
+					if (double_pawns > 1)
+					{
+						opening_score -= (double_pawns - 1) * double_pawn_penalty_opening;
+						endgame_score -= (double_pawns - 1) * double_pawn_penalty_endgame;
+					}
+
+					// on isolated pawn
+					if ((bitboards[p] & isolated_masks[square]) == 0)
+					{
+						// give an isolated pawn penalty
+						opening_score -= isolated_pawn_penalty_opening;
+						endgame_score -= isolated_pawn_penalty_endgame;
+					}
+					// on passed pawn
+					if ((passed_masks[BLACK][square] & bitboards[P]) == 0)
+					{
+						// give passed pawn bonus
+						opening_score -= passed_pawn_bonus[get_rank[square]];
+						endgame_score -= passed_pawn_bonus[get_rank[square]];
+					}
+					break;
+				//evaluate black knights
+				case n:
+				
+					break;
+					//evaluate black bishops
+				case b:
+					// mobility
+					opening_score -= (count_bits(get_bishop_attacks(square, occupancies[BOTH])) - bishop_unit) * bishop_mobility_opening;
+					endgame_score -= (count_bits(get_bishop_attacks(square, occupancies[BOTH])) - bishop_unit) * bishop_mobility_endgame;
+					break;
+				//evaluate black rooks
+				case r:
+					// semi open file
+					if ((bitboards[p] & file_masks[square]) == 0)
+					{
+						// add semi open file bonus
+						opening_score -= semi_open_file_score;
+						endgame_score -= semi_open_file_score;
+					}
+
+					// semi open file
+					if (((bitboards[P] | bitboards[p]) & file_masks[square]) == 0)
+					{
+						// add semi open file bonus
+						opening_score -= open_file_score;
+						endgame_score -= open_file_score;
+					}
+					break;
+				//evaluate black queens
+				case q:
+					// mobility
+					opening_score -= (count_bits(get_queen_attacks(square, occupancies[BOTH])) - queen_unit) * queen_mobility_opening;
+					endgame_score -= (count_bits(get_queen_attacks(square, occupancies[BOTH])) - queen_unit) * queen_mobility_endgame;
+					break;
+				//evaluate black king
+				case k:
+					//open file
+					if (((bitboards[P] | bitboards[p]) & file_masks[square]) == 0)
+					{
+						//open file penalty
+						opening_score += open_file_score;
+						endgame_score += open_file_score;
+					}
+					// semi open file
+					else if ((bitboards[p] & file_masks[square]) == 0)
+					{
+						//add semi open file penalty
+						opening_score += semi_open_file_score;
+						endgame_score += semi_open_file_score;
+					}		
+
+					//king safety bonus
+					opening_score -= count_bits(king_attacks[square] & occupancies[BLACK]) * king_shield_bonus;
+					endgame_score -= count_bits(king_attacks[square] & occupancies[BLACK]) * king_shield_bonus;
+					break;
 			}
-			case N: score += knight_score[square]; break;
-			case B:
-			{
-				//positional
-				score += bishop_score[square];
-				// mobility
-				score += count_bits(get_bishop_attacks(square, occupancies[BOTH])) * mobility_bonus;
-				break;
-			}
-			case R:
-			{
-				//positional
-				score += rook_score[square];
-
-				// semi open file
-				if ((bitboards[P] & file_masks[square]) == 0)
-					score += semi_open_file_score;
-
-				// open file
-				if (((bitboards[P] | bitboards[p]) & file_masks[square]) == 0)
-					score += open_file_score;
-
-				break;
-			}
-			case Q:
-			{
-				// mobility
-				score += count_bits(get_queen_attacks(square, occupancies[BOTH])) * mobility_bonus;
-				break;
-			}
-			case K:
-			{
-				// positional score
-				score += king_score[square];
-
-				// semi open file
-				if ((bitboards[P] & file_masks[square]) == 0)
-					score -= semi_open_file_score;
-
-				// open file
-				if (((bitboards[P] | bitboards[p]) & file_masks[square]) == 0)
-					score -= open_file_score;
-
-				// king safety bonus
-				score += count_bits(king_attacks[square] & occupancies[WHITE]) * king_shield_bonus;
-
-
-				break;
-			}
-			//black
-			case p:
-			{
-				//positional
-				score -= pawn_score[mirror_square[square]];
-
-				//double pawn penalty
-				//-1 to prevent counting the first pawn as double	
-				int double_pawns = count_bits(bitboards[p] & file_masks[square]) - 1;
-				//add penalties for multiple pawns on lane
-				if (double_pawns > 0)
-					score -= double_pawns * double_pawn_penalty;
-
-				//isolated pawn penalty
-				if ((bitboards[p] & isolated_masks[square]) == 0)
-					score -= isolated_pawn_penalty;
-
-				//passed pawn bonus
-				if ((passed_masks[BLACK][square] & bitboards[P]) == 0)
-					score -= passed_pawn_bonus[get_rank[mirror_square[square]]];
-
-				break;
-			}
-			case n: score -= knight_score[mirror_square[square]]; break;
-			case b:
-			{
-				// positional score
-				score -= bishop_score[mirror_square[square]];
-				// mobility
-				score -= count_bits(get_bishop_attacks(square, occupancies[BOTH])) * mobility_bonus;
-				break;
-			}
-			case r:
-			{
-				// positional score
-				score -= rook_score[mirror_square[square]];
-
-				// semi open file
-				if ((bitboards[p] & file_masks[square]) == 0)
-					score -= semi_open_file_score;
-
-				// semi open file
-				if (((bitboards[P] | bitboards[p]) & file_masks[square]) == 0)
-					score -= open_file_score;
-
-				break;
-			}
-			case q:
-			{
-				// mobility
-				score -= count_bits(get_queen_attacks(square, occupancies[BOTH])) * mobility_bonus;
-				break;
-			}
-			case k:
-			{
-				// positional score
-				score -= king_score[mirror_square[square]];
-
-				// semi open file
-				if ((bitboards[p] & file_masks[square]) == 0)
-					score += semi_open_file_score;
-
-				// open file
-				if (((bitboards[P] | bitboards[p]) & file_masks[square]) == 0)
-					score += open_file_score;
-
-				// king safety bonus
-				score -= count_bits(king_attacks[square] & occupancies[BLACK]) * king_shield_bonus;
-
-				break;
-			}
-
-			default: assert(!"Piece var out of range");
-			}*/
+			
 
 			//pop lsb bit
 			pop_bit(bitboard, square);
 		}
 	}
+
+
+	/*
+				Now in order to calculate interpolated score
+				for a given game phase we use this formula
+				(same for material and positional scores):
+
+				(
+				  score_opening * game_phase_score +
+				  score_endgame * (opening_phase_score - game_phase_score)
+				) / opening_phase_score
+
+				E.g. the score for pawn on d4 at phase say 5000 would be
+				interpolated_score = (12 * 5000 + (-7) * (6192 - 5000)) / 6192 = 8,342377261
+			*/
+
+
+
+			//int game_phase;
+
+			////game > opening
+			//if (game_phase_score > opening_phase_score) game_phase = OPENING;
+			////game < endgame
+			//else if (game_phase_score < endgame_phase_score) game_phase = ENDGAME;
+			////game between opening and endgame 
+			//else game_phase = MIDDELGAME;
+
+
+	// return pure opening score in opening
+	if (game_phase_score > opening_phase_score) score = opening_score;
+	// return pure endgame score in engame
+	else if (game_phase_score < endgame_phase_score) score = endgame_score;
+	// interpolate score in the middlegame
+	else
+	 score = (
+		 opening_score * game_phase_score +
+		 endgame_score * (opening_phase_score - game_phase_score)
+		 ) / opening_phase_score;
 
 
 	return (side == WHITE) ? score : -score;
@@ -3479,8 +3448,9 @@ static inline int evaluate()
 #define mate_value 49000
 #define mate_score 48000
 
-// hash table size (20mb)
-#define tt_size 800000
+// hash table size (16mb)
+//#define tt_size 16
+U64 hash_entries = 0ULL;
 
 #define no_hash_entry infinity * 2
 
@@ -3493,30 +3463,72 @@ static inline int evaluate()
 // transposition table data structure
 typedef struct TT
 {
-	U64 key;   // "almost" unique chess position identifier
-	int depth;      // current search depth
-	int flag;       // flag the type of node (fail-low/fail-high/PV) 
-	int score;      // score (alpha/beta/PV)
-} TT;               // transposition table (TT aka hash table)
+	U64 key;	//8 byte	"almost" unique chess position identifier
+	int depth;  //4 byte    current search depth
+	int flag;   //4 byte    flag the type of node (fail-low/fail-high/PV) 
+	int score;  //4 byte    score (alpha/beta/PV)
+} TT;      //sum:20 byte   (TT aka hash table)
 
 // define TT instance
-TT hash_table[tt_size];
+TT* hash_table = nullptr;
+
+// dynamically allocate memory for hash table
+void init_hash_table(int mb)
+{
+	const U64 ONE_MB = 0x100000ULL;
+
+	// init hash size
+	U64 hash_size = ONE_MB * mb;
+
+	// init number of hash entries
+	hash_entries = hash_size / sizeof(TT);
+
+	// free hash table if not empty
+	if (hash_table != nullptr)
+    {
+        std::cout << "Clearing hash memory..." << custom_endl;
+
+		free(hash_table);
+	}
+
+	// allocate memory
+	hash_table = (TT*)malloc(hash_entries * sizeof(TT));
+
+	// if allocation has failed
+	if (hash_table == nullptr)
+	{
+        std::cout << "Couldn't allocate memory for hash table, trying " << mb / 2 << "MB... " << custom_endl;
+
+		// try to allocate with half size
+		init_hash_table(mb / 2);
+	}
+	// if allocation succeeded
+	else
+	{
+		// clear hash table
+		clear_hash_table();
+        std::cout << "Hash table is initialized with " << hash_entries << " entries" << custom_endl;
+	}
+}
 
 // clear TT (hash table)
 void clear_hash_table()
 {
-	//// loop over TT elements
-	//for (int index = 0; index < hash_size; index++)
-	//{
-	//	// reset TT inner fields
-	//	hash_table[index].key = 0;
-	//	hash_table[index].depth = 0;
-	//	hash_table[index].flag = 0;
-	//	hash_table[index].score = 0;
-	//}
+	// init hash table entry pointer
+	TT* hash_entry;
+
+	// loop over TT elements
+	for (hash_entry = hash_table; hash_entry < hash_table + hash_entries; hash_entry++)
+	{
+		// reset TT inner fields
+		hash_entry->key = 0;
+		hash_entry->depth = 0;
+		hash_entry->flag = 0;
+		hash_entry->score = 0;
+	}
 
 	//this propably wont work for dynamic array
-	memset(hash_table, 0, sizeof(hash_table));
+	//memset(hash_table, 0, sizeof(hash_table));
 
 	assert(hash_table[0].depth == 0);
 	assert(hash_table[0].flag == 0);
@@ -3527,7 +3539,7 @@ void clear_hash_table()
 static inline int read_hash_entry(int alpha, int beta, int depth)
 {
 	//bring hash key down to table index storing the score data for current board position if available
-	TT* hash_entry = &hash_table[hash_key % tt_size];
+	TT* hash_entry = &hash_table[hash_key % hash_entries];
 
 	//make sure we're dealing with correct position
 	if (hash_entry->key == hash_key)
@@ -3561,7 +3573,7 @@ static inline int read_hash_entry(int alpha, int beta, int depth)
 static inline void write_hash_entry(int score, int depth, int hash_flag)
 {
 	//bring hash key down to table index storing the score data for current board position if available
-	TT* hash_entry = &hash_table[hash_key % tt_size];
+	TT* hash_entry = &hash_table[hash_key % hash_entries];
 
 	//adjust score to find mate in shortest path
 	//store score independant from actual path
@@ -3703,7 +3715,7 @@ static inline int score_move(int move)
 			score_pv = FALSE;
 
 			//printf("PV move: ");
-			//print_move(move);
+            //std::cout << get_move_string(move);
 			//printf(" ply: %d\n", ply);
 
 			//score PV move to search first
@@ -3880,6 +3892,9 @@ const int reduction_limit = 3;
 //main search
 static inline int negamax(int alpha, int beta, int depth)
 {
+	//init pv length
+	pv_length[ply] = ply;
+
 	//current move score
 	int score;
 	int hash_flag = hash_flag_alpha;
@@ -3903,7 +3918,6 @@ static inline int negamax(int alpha, int beta, int depth)
 	if ((nodes & LISTEN) == 0)
 		communicate();
 
-	pv_length[ply] = ply;
 
 	if (depth == 0)
 		//run quisuince
@@ -3998,7 +4012,6 @@ static inline int negamax(int alpha, int beta, int depth)
 			continue;
 		}
 		legal_count++;
-
 
 
 		//LMR
@@ -4161,46 +4174,62 @@ void search_position(int depth)
 		{
 			alpha = -infinity;
 			beta = infinity;
+            --current_depth;
 			continue;
 		}
+
 		//set up the window for the next itteration
 		alpha = score - 50;
 		beta = score + 50;
-
 
 		//get best move so far if time is up
 		if (stopped) break;
 		previous_best = pv_table[0][0];
 
 		//send info to gui
-		printf("info ");
+		std::cout << "info ";
 
 		if (score > -mate_value && score < -mate_score)
-			printf("score mate %d ", -(score + mate_value) / 2);
+            std::cout << "score mate " << -(score + mate_value) / 2;
 		else if (score > mate_score && score < mate_value)
-			printf("score mate %d ", (mate_value - score) / 2);
+            std::cout << "score mate " << (mate_value - score) / 2;
 		else
-			printf("score cp %d ", score);
+            std::cout << "score cp " << score;
 
-		printf("depth %d nodes %llu time %llu pv ", current_depth, nodes, (GetTickCount64() - start_time));
+        std::cout <<
+        " depth " <<current_depth <<
+        " nodes " << nodes <<
+        " time " << (GetTickCount64() - start_time) <<
+        " pv ";
 
 		//loop over pv line
 		for (int i = 0; i < pv_length[0]; i++)
-		{
-			print_move(pv_table[0][i]);
-			printf(" ");
-		}
-		printf("\n");
-	}
+            std::cout << get_move_string(pv_table[0][i]) << " ";
+		std::cout << custom_endl;
 
-	printf("bestmove ");
-	//if the search was stopped and we have a previous best move
+		if (time_set && GetTickCount64() + 4 > stop_time)
+		{
+			//stopped = true; 	
+
+			if (ply != 0)
+				std::cout << "Ply err! ply->" << ply << custom_endl;
+
+			assert(ply == 0);
+
+			break;
+		}
+	}
+	
+	std::string m;
+	m += "bestmove ";
+	//if the search was stopped, and we have a previous best move
 	if (stopped && previous_best)
-		print_move(previous_best);
-	//else if the search was not stopped or we dont have a previous best move return current
+		m += get_move_string(previous_best);
+	//else if the search was not stopped, or we don't have a previous best move return current
 	else
-		print_move(pv_table[0][0]);
-	printf("\n");
+		m += get_move_string(pv_table[0][0]);
+
+	std::cout << m << custom_endl;
 }
 
 #pragma endregion
@@ -4347,8 +4376,8 @@ void parse_go(const char* command)
 
 	int moves_to_go = moves_by_pieces[get_piece_count()];
 
-	int depth = 0, inc = 0;
-	U64 time = 0ULL, move_time = 0ULL;
+	int depth = 0;
+	U64 time = 0ULL, move_time = 0ULL, inc = 0ULL;
 	const char* argument = NULL;
 
 	time_set = false;
@@ -4358,23 +4387,35 @@ void parse_go(const char* command)
 
 	// match UCI "binc" command
 	if ((argument = strstr(command, "binc")) && side == BLACK)
+	{
 		// parse black time increment
 		inc = atoi(argument + 5);
+		time_set = true;
+	}
 
 	// match UCI "winc" command
 	if ((argument = strstr(command, "winc")) && side == WHITE)
+	{
 		// parse white time increment
 		inc = atoi(argument + 5);
+		time_set = true;
+	}
 
 	// match UCI "wtime" command
 	if ((argument = strstr(command, "wtime")) && side == WHITE)
+	{
 		// parse white time limit
 		time = atoi(argument + 6);
+		time_set = true;
+	}
 
 	// match UCI "btime" command
 	if ((argument = strstr(command, "btime")) && side == BLACK)
+	{
 		// parse black time limit
 		time = atoi(argument + 6);
+		time_set = true;
+	}
 
 	// match UCI "movestogo" command
 	if ((argument = strstr(command, "movestogo")))
@@ -4383,15 +4424,18 @@ void parse_go(const char* command)
 
 	// match UCI "movetime" command
 	if ((argument = strstr(command, "movetime")))
+	{
 		// parse amount of time allowed to spend to make a move
 		move_time = atoi(argument + 9);
+		time_set = true;
+	}
 
 	// match UCI "depth" command
 	if ((argument = strstr(command, "depth")))
 		// parse search depth
 		depth = atoi(argument + 6);
 
-	// if move time is not available
+	// if move time is available
 	if (move_time != 0)
 	{
 		// set time equal to move time
@@ -4405,30 +4449,43 @@ void parse_go(const char* command)
 	start_time = GetTickCount64();
 
 	// if time control is available
-	if (time != 0)
-	{
-		// flag we're playing with time control
-		time_set = true;
-
+	if (time_set)
+	{		
 		// set up timing
 		time /= moves_to_go;
 
-		if (time > 100) time -= 30;
-		else if (time > 50) time -= 25;
-		else if (time > 25) time -= 17;
-		else if (time > 15) time -= 10;
+		time += inc;
 
-		stop_time = start_time + time + inc;
+		if (time > 200) time -= 30;
+		else if (time > 100) time -= 26;
+		else if (time > 50) time -= 22;
+		else if (time > 25) time -= 18;
+		else if (time > 10) time -= 7;
+		else if (time > 5) time -= 5;
+		else if (time > 1) time -= 1;
+		else time = 0;
+
+		//use this instead(fixes loosing on time)? seems to only fail with 0 time and increment
+		// treat increment as seconds per move when time is almost up
+		//if (time < 1500 && inc && depth == 64) stoptime = starttime + inc - 50;
+
+		stop_time = start_time + time;
 	}
 
 	// if depth is not available
 	if (depth == 0)
-		// set depth to 64 plies (takes ages to complete...)
+		// set depth to max
 		depth = MAX_PLY;
 
 	// print debug info
-	printf("Time:%llu Start:%llu Stop:%llu Depth:%d Time-set:%s MovesToGo:%d \n",
-		time, start_time, stop_time, depth, (time_set ? "True" : "False"), moves_to_go);
+    std::cout <<
+    "Time:" << time <<
+    " Start:" << start_time <<
+    " Stop:" << stop_time <<
+    " Depth:" << depth <<
+    " Time-set:" << (time_set ? "True" : "False") <<
+    " MovesToGo:" << moves_to_go <<
+    custom_endl;
 
 	// search position
 	search_position(depth);
@@ -4448,29 +4505,17 @@ void uci_loop()
 {
 	const int size = 4095;
 
-	//reset stdin &stdin buffers
-	//setvbuf(stdin, NULL, _IOFBF, 64);
-	//setvbuf(stdout, NULL, _IOFBF, 64);
-
-	//setbuf(stdin, NULL);
-	//setbuf(stdout, NULL);
-
 	//user/GUI buffer
 	char input[size];
 
 	//engine info
-	printf("Crusher Chess\n");
-	printf("Hanno Kruger\n");
-	printf("uciok\n");
+    std::cout << "CrusherChess " << VERSION << " by Hanno Kruger" << custom_endl;
 
 	//uci loop
-	while (1)
+	while (true)
 	{
 		//reset input
 		memset(input, 0, sizeof(input));
-
-		//make sure output reaches gui
-		fflush(stdout);
 
 		//skip loop cycle while nothing in stdin else populate input
 		if (!fgets(input, size, stdin)) continue;
@@ -4481,7 +4526,7 @@ void uci_loop()
 		//UCI isready
 		if (strncmp(input, "isready", 7) == 0)
 		{
-			printf("readyok\n");
+            std::cout << "readyok" << custom_endl;
 			continue;
 		}
 		//UCI position		 
@@ -4507,15 +4552,32 @@ void uci_loop()
 		//greetings
 		else if (strncmp(input, "uci", 3) == 0)
 		{
-			//engine info
-			printf("Crusher Chess\n");
-			printf("Hanno Kruger\n");
-			printf("uciok\n");
+            std::cout << "id name CrusherChess " << VERSION << custom_endl;
+            std::cout << "id author Hanno Kruger" << custom_endl;
+            std::cout << "option name Hash type spin default 64 min 1 max " << MAX_HASH << custom_endl;
+            std::cout << "uciok" << custom_endl;
+		}
+		else if (!strncmp(input, "setoption name Hash value ", 26))
+		{
+			int mb = 64;
+
+			// init MB
+			sscanf_s(input, "%*s %*s %*s %*s %d", &mb);
+
+			// adjust MB if going beyond the allowed bounds
+			if (mb < 1) mb = 1;
+			if (mb > MAX_HASH) mb = MAX_HASH;
+
+			// set hash table size in MB
+            std::cout << "Set hash table size to " << mb << "MB" << custom_endl;
+			init_hash_table(mb);
 		}
 		else if (input[0] == 'd')
 			print_board();
 		else
-			printf("Unknown command\n");
+			std::cout <<"Unknown command" << custom_endl;
+
+		//fflush(stdin);
 	}
 }
 
@@ -4529,23 +4591,31 @@ void uci_loop()
 
 
 int main()
-{   //use %ls for wchar
+{ 
+	//setvbuf(stdout, NULL, _IONBF, 0);
+	//std::cout.setf(std::ios_base::unitbuf);
+
+	//use %ls for wchar
 
 	//need to fix score imbalance with mirror table eroor in this position "1k6/8/8/8/8/8/8/6K1 w - - 0 1"
 
+	//bugs:
+	//lose on time
+	//null move from pv, is this fixed now?
+
 	init_all();
 
-	int debug = 1;
-
-	if (debug)
-	{
-		parse_fen(start_position);
+#ifdef DEBUG
+		//tricky
+		parse_fen("r3k2r/p1ppqpb1/1n2pnp1/3PN3/1p2P3/2N2Q1p/PPPB1PPP/R3K2R w KQkq - 0 1 ");
+		//parse_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 ");
+		//parse_fen(start_position);
 
 		print_board();
 
 		printf("score:%d\n", evaluate());
 
-
+		//perft_test(5);
 		
 		//auto startTime = std::chrono::high_resolution_clock::now();
 
@@ -4614,11 +4684,12 @@ int main()
 
 		
 		//getchar();
-	}
-	else
+
+		std::wcin.get();
+#else
 		uci_loop();
+#endif
 
-
-	//std::wcin.get();
+	free(hash_table);
 	return 0;
 }
