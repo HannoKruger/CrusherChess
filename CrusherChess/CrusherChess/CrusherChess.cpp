@@ -18,8 +18,7 @@
 #include <wtypes.h>
 #include <vector>
 #include <ostream>
-//#include <consoleapi2.h>
-#include <assert.h>
+#include <cassert>
 #include <set>
 
 template <typename CharT, typename Traits>
@@ -4371,12 +4370,13 @@ void search_position(int depth)
 		{
 			alpha = -infinity;
 			beta = infinity;
+            --current_depth;
 			continue;
 		}
+
 		//set up the window for the next itteration
 		alpha = score - 50;
 		beta = score + 50;
-
 
 		//get best move so far if time is up
 		if (stopped) break;
@@ -4415,38 +4415,17 @@ void search_position(int depth)
 			break;
 		}
 	}
-
-	//waist some time to ensure move gets to gui	
-	U64 iters = 10000000;
-
-	volatile int sink;
-	do {
-		sink = 0;
-	} while (--iters > 0);
-	(void)sink;
 	
-	
-	std::string m = "";
+	std::string m;
 	m += "bestmove ";
-	//if the search was stopped and we have a previous best move
+	//if the search was stopped, and we have a previous best move
 	if (stopped && previous_best)
 		m += get_move_string(previous_best);
-	//else if the search was not stopped or we dont have a previous best move return current
+	//else if the search was not stopped, or we don't have a previous best move return current
 	else
 		m += get_move_string(pv_table[0][0]);
 
 	std::cout << m << custom_endl;
-	
-	
-	//waist some time to ensure move gets to gui	
-	iters = 10000000;
-
-	//auto start = std::chrono::system_clock::now();
-
-	do {
-		sink = 0;
-	} while (--iters > 0);
-	(void)sink;
 }
 
 #pragma endregion
