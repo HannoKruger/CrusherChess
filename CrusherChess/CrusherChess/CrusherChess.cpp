@@ -4,7 +4,6 @@
 //includes
 #pragma region 
 
-#pragma once
 
 #define NOMINMAX
 
@@ -22,6 +21,12 @@
 //#include <consoleapi2.h>
 #include <assert.h>
 #include <set>
+
+template <typename CharT, typename Traits>
+inline std::basic_ostream<CharT, Traits>& custom_endl(std::basic_ostream<CharT, Traits>& os) {
+    return std::cout << std::endl;
+}
+
 
 const char* VERSION = "1.3.1";
 #define MAX_HASH 32768
@@ -247,11 +252,13 @@ static inline int get_lsb_index(U64 num)
 const char* ascii_pieces = "PNBRQKpnbrqk";
 
 // unicode pieces
-//const wchar_t* unicode_pieces[12] = { L"♙", L"♘", L"♗", L"♖", L"♕", L"♔", L"♟︎", L"♞", L"♝", L"♜", L"♛", L"♚" };
+// wchar_t* unicode_pieces[12] = { L"♙", L"♘", L"♗", L"♖", L"♕", L"♔", L"♟︎", L"♞", L"♝", L"♜", L"♛", L"♚" };
 //unicode piece with code point
 // unicode pieces
 //\u265A
-const wchar_t* unicode_pieces[12] = { L"\u265F", L"\u265E", L"\u265D", L"\u265C", L"\u265B", L"\u265A",  L"\u2659", L"\u2658", L"\u2657", L"\u2656",L"\u2655", L"\u2654" };
+
+//FE0E is a variation selector-15, it forces the black and white pieces to be displayed as text, not as emoji
+const wchar_t* unicode_pieces[12] = { L"\u265F\uFE0E", L"\u265E\uFE0E", L"\u265D\uFE0E", L"\u265C\uFE0E", L"\u265B\uFE0E", L"\u265A\uFE0E",  L"\u2659\uFE0E", L"\u2658\uFE0E", L"\u2657\uFE0E", L"\u2656\uFE0E",L"\u2655\uFE0E", L"\u2654\uFE0E" };
 
 
 //convert ascii character pieces to constants
@@ -814,9 +821,9 @@ void print_board(bool ascii = false)
 
 					//WriteConsoleW(handle, unicode_pieces[piece], 1, &written, NULL);
 
-					if (piece == P)
-						WriteConsoleW(handle, unicode_pieces[piece], 1, &written, NULL);
-					else
+//					if (piece == P)
+//						WriteConsoleW(handle, unicode_pieces[piece], 1, &written, NULL);
+//					else
 					{
 						WriteConsoleW(handle, unicode_pieces[piece], 1, &written, NULL);
 						WriteConsoleW(handle, L" ", 1, &written, NULL);
@@ -842,7 +849,7 @@ void print_board(bool ascii = false)
 		(castle & BQ) ? 'q' : '-'
 	);
 
-	std::cout << "Fen: " << get_fen() << std::endl;
+	std::cout << "Fen: " << get_fen() << custom_endl;
 
 	printf("Key: %llx\n\n", hash_key);
 }
@@ -930,7 +937,7 @@ void parse_fen(const char* fen)
 			case  'k': castle |= BK; break;
 			case  'q': castle |= BQ; break;
 			case  '-': break;
-            default: std::cout << ("fen string in inccorect format!") << std::endl; break;
+            default: std::cout << ("fen string in inccorect format!") << custom_endl; break;
 			}
 		}
 	}
@@ -1046,10 +1053,10 @@ void test_move_encoding()
 
 void print_moves_scores(Moves* moves)
 {
-	std::cout << "move scores:" << std::endl;
+	std::cout << "move scores:" << custom_endl;
 	for (int i = 0; i < moves->count; i++)
 	{
-        std::cout << get_move_string(moves->moves[i]) << " score: " << score_move(moves->moves[i]) << std::endl;
+        std::cout << get_move_string(moves->moves[i]) << " score: " << score_move(moves->moves[i]) << custom_endl;
 	}
 }
 
@@ -2424,7 +2431,7 @@ static inline int make_move(int move)
 	{
 		printf("Make move\n");
 		printf("move: ");
-		std::cout << get_move_string(move) << std::endl;
+		std::cout << get_move_string(move) << custom_endl;
 		print_board();
 
 		printf("hash sould be: %llx\n", hash_from_scratch);
@@ -2497,7 +2504,7 @@ static inline void perft_driver(int depth)
 		//else
 		//{
 			//collisions.push_back(hash_key);
-			//std::cout << "Collision! " << "length:" << keys.size() << std::endl;
+			//std::cout << "Collision! " << "length:" << keys.size() << custom_endl;
 
 			//print_board();
 		//}
@@ -2541,7 +2548,7 @@ void perft_test(int depth)
 			//}
 			//else
 			//{
-				//std::cout << "Collision! " << "length:" << keys.size() << std::endl;
+				//std::cout << "Collision! " << "length:" << keys.size() << custom_endl;
 			//	collisions.push_back(hash_key);
 
 				//print_board();
@@ -2561,7 +2568,7 @@ void perft_test(int depth)
             square_to_coordinates[get_move_source(move)] <<
             square_to_coordinates[get_move_target(move)] <<
             promoted_pieces[get_move_promoted(move)] <<
-            "  nodes: " << current_nodes << std::endl;
+            "  nodes: " << current_nodes << custom_endl;
 		}
 	}
 	else nodes++;
@@ -2942,7 +2949,7 @@ int Mget_best_move(int depth)
 			int eval = MMiniMax(depth - 1, false);
 
             std::cout << "no" << (i + 1) << "  score: " << eval << "  move:";
-			std::cout << get_move_string(moves->moves[i]) << std::endl;
+			std::cout << get_move_string(moves->moves[i]) << custom_endl;
 
 			take_back();
 
@@ -2976,7 +2983,7 @@ int Mget_best_move(int depth)
 
 			int eval = MMiniMax(depth - 1, true);
 			printf("no%d  score: %d  move:", (i + 1), eval);
-			std::cout << get_move_string(moves->moves[i]) << std::endl;
+			std::cout << get_move_string(moves->moves[i]) << custom_endl;
 
 			take_back();
 
@@ -2986,7 +2993,7 @@ int Mget_best_move(int depth)
 					bestmoves.push_back(moves->moves[i]);
 				else
 				{
-                    std::cout << "black new eval:" << eval << std::endl;
+                    std::cout << "black new eval:" << eval << custom_endl;
 
 					bestmoves.clear();
 					bestmoves.push_back(moves->moves[i]);
@@ -3676,7 +3683,7 @@ void init_hash_table(int mb)
 	// free hash table if not empty
 	if (hash_table != nullptr)
     {
-        std::cout << "Clearing hash memory..." << std::endl;
+        std::cout << "Clearing hash memory..." << custom_endl;
 
 		free(hash_table);
 	}
@@ -3687,7 +3694,7 @@ void init_hash_table(int mb)
 	// if allocation has failed
 	if (hash_table == nullptr)
 	{
-        std::cout << "Couldn't allocate memory for hash table, trying " << mb / 2 << "MB... " << std::endl;
+        std::cout << "Couldn't allocate memory for hash table, trying " << mb / 2 << "MB... " << custom_endl;
 
 		// try to allocate with half size
 		init_hash_table(mb / 2);
@@ -3697,7 +3704,7 @@ void init_hash_table(int mb)
 	{
 		// clear hash table
 		clear_hash_table();
-        std::cout << "Hash table is initialized with " << hash_entries << " entries" << std::endl;
+        std::cout << "Hash table is initialized with " << hash_entries << " entries" << custom_endl;
 	}
 }
 
@@ -4394,14 +4401,14 @@ void search_position(int depth)
 		//loop over pv line
 		for (int i = 0; i < pv_length[0]; i++)
             std::cout << get_move_string(pv_table[0][i]) << " ";
-		std::cout << std::endl;
+		std::cout << custom_endl;
 
 		if (time_set && GetTickCount64() + 4 > stop_time)
 		{
 			//stopped = true; 	
 
 			if (ply != 0)
-				std::cout << "Ply err! ply->" << ply << std::endl;
+				std::cout << "Ply err! ply->" << ply << custom_endl;
 
 			assert(ply == 0);
 
@@ -4428,7 +4435,7 @@ void search_position(int depth)
 	else
 		m += get_move_string(pv_table[0][0]);
 
-	std::cout << m << std::endl;
+	std::cout << m << custom_endl;
 	
 	
 	//waist some time to ensure move gets to gui	
@@ -4695,7 +4702,7 @@ void parse_go(const char* command)
     " Depth:" << depth <<
     " Time-set:" << (time_set ? "True" : "False") <<
     " MovesToGo:" << moves_to_go <<
-    std::endl;
+    custom_endl;
 
 	// search position
 	search_position(depth);
@@ -4715,28 +4722,17 @@ void uci_loop()
 {
 	const int size = 4095;
 
-	//reset stdin &stdin buffers
-	//setvbuf(stdin, NULL, _IOFBF, 64);
-	//setvbuf(stdout, NULL, _IOFBF, 64);
-
-	//setbuf(stdin, NULL);
-	//setbuf(stdout, NULL);
-
 	//user/GUI buffer
 	char input[size];
 
 	//engine info
-    std::cout << "CrusherChess " << VERSION << " by Hanno Kruger" << std::endl;
-    std::cout << "uciok" << std::endl;
+    std::cout << "CrusherChess " << VERSION << " by Hanno Kruger" << custom_endl;
 
 	//uci loop
 	while (true)
 	{
 		//reset input
 		memset(input, 0, sizeof(input));
-
-		//make sure output reaches gui
-		//fflush(stdout);
 
 		//skip loop cycle while nothing in stdin else populate input
 		if (!fgets(input, size, stdin)) continue;
@@ -4747,7 +4743,7 @@ void uci_loop()
 		//UCI isready
 		if (strncmp(input, "isready", 7) == 0)
 		{
-            std::cout << "readyok" << std::endl;
+            std::cout << "readyok" << custom_endl;
 			continue;
 		}
 		//UCI position		 
@@ -4773,10 +4769,10 @@ void uci_loop()
 		//greetings
 		else if (strncmp(input, "uci", 3) == 0)
 		{
-            std::cout << "id name CrusherChess " << VERSION << std::endl;
-            std::cout << "id author Hanno Kruger" << std::endl;
-            std::cout << "option name Hash type spin default 64 min 1 max " << MAX_HASH << std::endl;
-            std::cout << "uciok" << std::endl;
+            std::cout << "id name CrusherChess " << VERSION << custom_endl;
+            std::cout << "id author Hanno Kruger" << custom_endl;
+            std::cout << "option name Hash type spin default 64 min 1 max " << MAX_HASH << custom_endl;
+            std::cout << "uciok" << custom_endl;
 		}
 		else if (!strncmp(input, "setoption name Hash value ", 26))
 		{
@@ -4790,15 +4786,15 @@ void uci_loop()
 			if (mb > MAX_HASH) mb = MAX_HASH;
 
 			// set hash table size in MB
-            std::cout << "Set hash table size to " << mb << "MB" << std::endl;
+            std::cout << "Set hash table size to " << mb << "MB" << custom_endl;
 			init_hash_table(mb);
 		}
 		else if (input[0] == 'd')
 			print_board();
 		else
-			std::cout <<"Unknown command" << std::endl;
+			std::cout <<"Unknown command" << custom_endl;
 
-		fflush(stdin);
+		//fflush(stdin);
 	}
 }
 

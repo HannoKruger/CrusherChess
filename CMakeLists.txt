@@ -5,7 +5,10 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_EXE_LINKER_FLAGS "-static")
 
 add_executable(CrusherChessLinux
-        CrusherChess/CrusherChess/LinuxBuild/CrusherChess.cpp)
+        CrusherChess/LinuxBuild/CrusherChess.cpp)
 
 add_executable(CrusherChess
         CrusherChess/CrusherChess/CrusherChess.cpp)
+
+add_executable(TestExecutable
+        CrusherChess/test.cpp)
