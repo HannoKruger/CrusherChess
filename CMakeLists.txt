@@ -22,7 +22,9 @@ add_executable(CrusherChess
         CrusherChess/src/CrusherChess.cpp
         CrusherChess/src/Debug.cpp
         CrusherChess/src/types.h
-        CrusherChess/src/macros.h)
+        CrusherChess/src/macros.h
+        CrusherChess/src/random.h
+)
 
 add_executable(TestExecutable
         CrusherChess/tests/test.cpp)

@@ -17,6 +17,7 @@
 #include <ostream>
 
 #include "types.h"
+#include "random.h"
 
 template <typename CharT, typename Traits>
 inline std::basic_ostream<CharT, Traits>& custom_endl(std::basic_ostream<CharT, Traits>& os) {
@@ -63,8 +64,6 @@ constexpr auto killer_position = "rnbqkb1r/pp1p1pPp/8/2p1pP2/1P1P4/3P3P/P1P1P3/R
 \****************************************/
 #pragma region
 void print_bitboard(U64 bitboard);
-void print_magic_numbers();
-void calc_mask_files();
 U64 mask_pawn_attacks(bool side, int square);
 U64 mask_knight_attacks(int square);
 U64 mask_king_attacks(int square);
@@ -76,14 +75,10 @@ void init_leapers_attacks();
 void init_hash_table(int mb);
 void init_all();
 
-static inline unsigned int randu32();
-static inline U64 randu64();
 
 U64 generate_magic_number();
 
 U64 set_occupancy(int index, int bits_in_mask, U64 attack_mask);
-U64 find_magic_number(int square, int relevant_bits, int bishop);
-void init_magic_numbers();
 void init_sliders_attacks(int bishop);
 
 static inline U64 get_bishop_attacks(int square, U64 occupancy);
@@ -221,9 +216,6 @@ U64 rank_masks[SQUARE_NB];
 U64 isolated_masks[SQUARE_NB];
 U64 passed_masks[COLOR_NB][SQUARE_NB];
 
-//psuedo random number state
-unsigned int random_state = 1804289383;
-
 #pragma endregion
 /****************************************\
  ========================================
@@ -246,26 +238,26 @@ U64 side_key;
 
 void init_random_keys()
 {
-	//make sure random seed is reset
-	random_state = 1804289383;
+    //1804289383;
+    PRNG rng(1070372);
 
 	//loop over piece codes
 	for (int piece = P; piece <= k; piece++)
 	{
 		//assign random piece key
 		for (int square = 0; square < SQUARE_NB; square++)
-			piece_keys[piece][square] = randu64();
+			piece_keys[piece][square] = rng.rand<U64>();
 	}
 	//loop over board
 	for (int square = 0; square < SQUARE_NB; square++)
-		enpassant_keys[square] = randu64();
+		enpassant_keys[square] = rng.rand<U64>();
 
 	//init castle keys
 	for (int i = 0; i < 16; i++)
-		castle_keys[i] = randu64();
+		castle_keys[i] = rng.rand<U64>();
 
 	//init random side key	
-	side_key = randu64();
+	side_key = rng.rand<U64>();
 }
 
 #pragma endregion
@@ -911,42 +903,7 @@ void init_all()
 	parse_fen(start_position);
 }
 #pragma endregion
-/****************************************\
- ========================================
-				 Random
- ========================================
-\****************************************/
-#pragma region
-//generate 32bit psuedo legal moves
-static inline unsigned int randu32()
-{
-	//fast method
-	//seed = (214013U * seed + 2531011U);
-	//return (seed >> 16) & 0x7FFFU;
 
-	random_state ^= random_state << 13;
-	random_state ^= random_state >> 17;
-	random_state ^= random_state << 5;
-
-	return random_state;
-}
-static inline U64 randu64()
-{
-	U64 n1, n2, n3, n4;
-
-	//only keep top 16 bits
-	n1 = (U64)randu32() & 0xFFFF;
-	n2 = (U64)randu32() & 0xFFFF;
-	n3 = (U64)randu32() & 0xFFFF;
-	n4 = (U64)randu32() & 0xFFFF;
-
-	return n1 | (n2 << 16) | (n3 << 32) | (n4 << 48);
-}
-U64 generate_magic_number()
-{
-	return randu64() & randu64() & randu64();
-}
-#pragma endregion
 /****************************************\
  ========================================
 				Magics
@@ -981,6 +938,7 @@ U64 set_occupancy(int index, int bits_in_mask, U64 attack_mask)
 U64 find_magic_number(int square, int relevant_bits, int bishop)
 {
 	const int size = 4096;
+    PRNG rng(1070372);
 
 	U64 occupancies[size], attacks[size], used_attacks[size];
 	U64 attack_mask = bishop ? mask_bishop_attacks(square) : mask_rook_attacks(square);
@@ -999,7 +957,7 @@ U64 find_magic_number(int square, int relevant_bits, int bishop)
 	for (int random_cnt = 0; random_cnt < 100000000; random_cnt++)
 	{
 		//generate magic number candidate
-		U64 magic_number = generate_magic_number();
+		U64 magic_number = rng.sparse_rand<U64>();
 
 		//skip bad numbers
 		if (count_bits((attack_mask * magic_number) & 0xFF00000000000000) < 6) continue;
