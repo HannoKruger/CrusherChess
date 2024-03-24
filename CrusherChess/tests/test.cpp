@@ -37,16 +37,16 @@ int main() {
 //
 //    std::cout << "The result is " << y << std::endl;
 
- __asm__(
-        "movl %1, %%eax\n\t"
-        "addl %%eax, %%eax\n\t"
-        "movl %%eax, %0"
-        : "=r"(y) /* y is output operand, %0 */
-        : "r"(x)  /* x is input operand, %1 */
-        : "%eax"  /* %eax is clobbered register */
-    );
+ //__asm__(
+ //       "movl %1, %%eax\n\t"
+ //       "addl %%eax, %%eax\n\t"
+ //       "movl %%eax, %0"
+ //       : "=r"(y) /* y is output operand, %0 */
+ //       : "r"(x)  /* x is input operand, %1 */
+ //       : "%eax"  /* %eax is clobbered register */
+ //   );
 
-    std::cout << "The result is " << y << std::endl;
+ //   std::cout << "The result is " << y << std::endl;
 
     return 0;
 }
