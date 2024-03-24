@@ -40,6 +40,10 @@ add_executable(CrusherChess
         CrusherChess/src/hash.h
         CrusherChess/src/moves.h
         CrusherChess/src/types.cpp
+        CrusherChess/src/search.cpp
+        CrusherChess/src/search.h
+        CrusherChess/src/evaluation.cpp
+        CrusherChess/src/evaluation.h
 )
 
 add_executable(TestExecutable

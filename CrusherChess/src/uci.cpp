@@ -13,6 +13,7 @@
 #include "transposition.h"
 #include "hash.h"
 #include "movegen.h"
+#include "search.h"
 
 
 
@@ -504,9 +505,8 @@ void parse_go(const char* command)
     custom_endl;
 
 
-    throw std::runtime_error("Not implemented");
 	// search position
-	//search_position(depth);
+	search_position(depth);
 }
 
 

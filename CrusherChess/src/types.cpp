@@ -1,6 +1,8 @@
 #include "types.h"
 
 // Define global variables
+U64 nodes = 0ULL;
+
 U64 bitboards[12] = {};
 U64 occupancies[3] = {};
 int side = WHITE;

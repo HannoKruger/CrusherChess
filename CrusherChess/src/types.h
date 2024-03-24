@@ -14,6 +14,9 @@
 
 inline constexpr const char* VERSION = "1.3.1";
 
+//leaf nodes (number of positions reached at given depth
+extern U64 nodes;
+
 
 // FEN dedug positions
 #define empty_board "8/8/8/8/8/8/8/8 b - - "

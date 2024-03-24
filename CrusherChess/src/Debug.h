@@ -12,3 +12,4 @@ std::string get_move_string(int move);
 
 void print_board(bool ascii = false);
 std::string get_fen();
+int get_piece(int file, int rank);

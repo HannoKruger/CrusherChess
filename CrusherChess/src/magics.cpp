@@ -93,14 +93,16 @@ U64 find_magic_number(int square, int relevant_bits, int bishop)
 }
 
 
+
 void init_magic_numbers()
 {
-	throw std::string("magic numbers not defined");
-
-	/* for (int square = 0; square < SQUARE_NB; square++)
+    throw std::runtime_error("Not implemented");
+/*
+	for (int square = 0; square < SQUARE_NB; square++)
 		 rook_magic_numbers[square] = find_magic_number(square, rook_relevant_bits[square], rook);
 	 for (int square = 0; square < SQUARE_NB; square++)
-		 bishop_magic_numbers[square] = find_magic_number(square, bishop_relevant_bits[square], bishop);*/
+		 bishop_magic_numbers[square] = find_magic_number(square, bishop_relevant_bits[square], bishop);
+*/
 }
 
 void init_sliders_attacks(int piece)
