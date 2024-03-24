@@ -147,8 +147,11 @@ void communicate()
 int parse_move(const char* move_string)
 {
 	int length = strlen(move_string);
-	if (length < 4)
+
+	if (length < 4) {
+        assert(length >= 4);
 		throw std::invalid_argument("move string too short!");
+    }
 
 	Moves move_list[1];
 
@@ -588,8 +591,7 @@ void uci_loop()
 			init_hash_table(mb);
 		}
 		else if (input[0] == 'd'){
-            throw new std::runtime_error("Not implemented");
-			//print_board();
+			print_board();
             }
 		else
 			std::cout <<"Unknown command" << custom_endl;

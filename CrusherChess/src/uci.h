@@ -9,6 +9,7 @@ extern U64 stop_time; // uci stoptime command
 
 
 int parse_move(const char* move_string);
+void parse_fen(const char* fen);
 void parse_position(const char* command);
 int get_piece_count();
 void parse_go(const char* command);
