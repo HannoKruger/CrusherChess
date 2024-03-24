@@ -1,13 +1,14 @@
 #pragma once
-#include "types.h"
+#include <cassert>
+#include "typedefs.h"
 
 //psuedo random number state
 //unsigned int random_state = 1804289383;
 
 
-//static inline unsigned int randu32();
+//static  unsigned int randu32();
 //
-//static inline U64 randu64();
+//static  U64 randu64();
 //
 //U64 generate_magic_number();
 
@@ -59,7 +60,7 @@ public:
 //	return random_state;
 //}
 
-//constexpr inline U64 randu64()
+//constexpr  U64 randu64()
 //{
 //	U64 n1, n2, n3, n4;
 //

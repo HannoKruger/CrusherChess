@@ -1,21 +1,33 @@
 #pragma once
 #include <map>
+#include <cstdio>
+#include <ostream>
+#include <iostream>
+#include "typedefs.h"
+#include "Debug.h"
+#include "bitoperations.h"
 
-typedef unsigned long long U64;
-//move list
-typedef struct Moves
-{
-	int moves[255];
-	//could possibily use this?
-	//std::size(data);
 
-   // int legal[255];
+#define MAX_HASH 32768
+//max reachable ply
+#define MAX_PLY 64
 
-	//move count
-	int count;
+inline constexpr const char* VERSION = "1.3.1";
 
-} Moves;
 
+// FEN dedug positions
+#define empty_board "8/8/8/8/8/8/8/8 b - - "
+#define start_position "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 "
+#define tricky_position "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 "
+constexpr auto killer_position = "rnbqkb1r/pp1p1pPp/8/2p1pP2/1P1P4/3P3P/P1P1P3/RNBQKBNR w KQkq e6 0 1";
+#define cmk_position "r2q1rk1/ppp2ppp/2n1bn2/2b1p3/3pP3/3P1NPP/PPP1NPB1/R1BQ1RK1 b - - 0 9 "
+#define repetitions "2r3k1/R7/8/1R6/8/8/P4KPP/8 w - - 0 40 "
+
+
+template <typename CharT, typename Traits>
+ std::basic_ostream<CharT, Traits>& custom_endl(std::basic_ostream<CharT, Traits>& os) {
+    return std::cout << std::endl;
+}
 
 
 /****************************************\
@@ -72,6 +84,66 @@ enum { COLOR_NB = 2 };
 
 #pragma endregion
 
+
+
+
+
+/****************************************\
+ ========================================
+				 Globals
+ ========================================
+\****************************************/
+#pragma region
+//piece bitboards
+extern U64 bitboards[12];
+
+//occupancy bitboards
+extern U64 occupancies[3];
+
+//side to move, init to white
+extern int side;
+
+//en passant square
+extern int enpassant;
+
+//castling rights
+extern int castle;
+
+//"almost" unique position identifier aka hash key
+extern U64 hash_key;
+
+extern U64 repetition_table[1000];//number of plies in whole game
+extern int repetition_index;
+//half move counter
+extern int ply;
+
+
+//leaper attacks
+extern U64 pawn_attacks[COLOR_NB][SQUARE_NB];
+extern U64 knight_attacks[SQUARE_NB];
+extern U64 king_attacks[SQUARE_NB];
+
+//attacks masks
+extern U64 bishop_masks[SQUARE_NB];
+extern U64 rook_masks[SQUARE_NB];
+
+//attacks table [square][occupancies]
+extern U64 bishop_attacks[SQUARE_NB][512];
+extern U64 rook_attacks[SQUARE_NB][4096];
+
+//masks for pawns [square]
+extern U64 file_masks[SQUARE_NB];
+extern U64 rank_masks[SQUARE_NB];
+
+extern U64 isolated_masks[SQUARE_NB];
+extern U64 passed_masks[COLOR_NB][SQUARE_NB];
+
+#pragma endregion
+
+
+
+
+
 /****************************************\
  ========================================
 				Constants
@@ -92,7 +164,7 @@ constexpr const wchar_t* unicode_pieces[12] = { L"\u265F\uFE0E", L"\u265E\uFE0E"
 
 
 //convert ascii character pieces to constants
-inline const std::map <char, int> char_pieces =
+ const std::map <char, int> char_pieces =
 {
 	//white pieces
 	{'P',P},
@@ -111,7 +183,7 @@ inline const std::map <char, int> char_pieces =
 };
 
 //promoted pieces for uci
-inline const std::map <int,const char> promoted_pieces =
+ const std::map <int,const char> promoted_pieces =
 {
 	//white pieces
 	{Q,'q'},
@@ -337,4 +409,225 @@ constexpr const int castling_rights[64] =
 };
 
 
+#pragma endregion
+
+
+/****************************************\
+ ========================================
+			  Leaper attacks
+ ========================================
+\****************************************/
+#pragma region
+//generate not a file, not h file and so on
+inline void calc_mask_files()
+{
+	U64 not_a_file = 0ULL;
+	U64 not_h_file = 0ULL;
+
+
+	for (size_t y = 0, cnt = 0; y < 8; ++y)
+	{
+		for (size_t x = 0; x < 8; x++, ++cnt)
+		{
+			if (x != 0)
+				set_bit(not_a_file, cnt);
+			if (x != 7)
+				set_bit(not_h_file, cnt);
+		}
+	}
+	printf("not a\n");
+	print_bitboard(not_a_file);
+	printf("not h\n");
+	print_bitboard(not_h_file);
+}
+//generate pawn attacks
+inline U64 mask_pawn_attacks(bool side, int square)
+{
+	U64 attacks = 0ULL;
+	U64 bitboard = 0ULL;
+
+	set_bit(bitboard, square);
+
+	//white
+	if (side == WHITE)
+	{
+		auto shift7 = bitboard >> 7;
+		auto shift9 = bitboard >> 9;
+
+
+		if (shift7 & not_a_file) attacks |= shift7;
+		if (shift9 & not_h_file) attacks |= shift9;
+	}
+	//black
+	else
+	{
+		auto shift7 = bitboard << 7;
+		auto shift9 = bitboard << 9;
+
+
+		if (shift7 & not_h_file) attacks |= shift7;
+		if (shift9 & not_a_file) attacks |= shift9;
+	}
+
+	return attacks;
+}
+//generate knight attacks
+inline U64 mask_knight_attacks(int square)
+{
+	U64 attacks = 0ULL;
+	U64 bitboard = 0ULL;
+
+	set_bit(bitboard, square);
+
+	auto TR = bitboard >> 15;//top right
+	auto TL = bitboard >> 17;//top left
+	auto RT = bitboard >> 6;//right top
+	auto LT = bitboard >> 10;//left top
+
+	auto BL = bitboard << 15;//bottom left
+	auto BR = bitboard << 17;//bottom right
+	auto LB = bitboard << 6;//left bottom
+	auto RB = bitboard << 10;//right bottom
+
+
+	if (TR & not_a_file)  attacks |= TR;
+	if (TL & not_h_file)  attacks |= TL;
+	if (RT & not_ab_file) attacks |= RT;
+	if (LT & not_hg_file) attacks |= LT;
+
+	if (BL & not_h_file)  attacks |= BL;
+	if (BR & not_a_file)  attacks |= BR;
+	if (LB & not_hg_file) attacks |= LB;
+	if (RB & not_ab_file) attacks |= RB;
+
+	return attacks;
+}
+//generate king attacks
+inline U64 mask_king_attacks(int square)
+{
+	U64 attacks = 0ULL;
+	U64 bitboard = 0ULL;
+
+	set_bit(bitboard, square);
+
+	auto TL = bitboard >> 9;//top left
+	auto T = bitboard >> 8;//top
+	auto TR = bitboard >> 7;//top right
+	auto L = bitboard >> 1;//left
+
+	auto BR = bitboard << 9;//botom right
+	auto B = bitboard << 8;//botom
+	auto BL = bitboard << 7;//botom left
+	auto R = bitboard << 1;//right
+
+	if (TL & not_h_file)  attacks |= TL;
+	if (TR & not_a_file) attacks |= TR;
+	if (L & not_h_file) attacks |= L;
+
+	if (BR & not_a_file) attacks |= BR;
+	if (BL & not_h_file)  attacks |= BL;
+	if (R & not_a_file) attacks |= R;
+
+	attacks |= T;
+	attacks |= B;
+
+	return attacks;
+}
+#pragma endregion
+/****************************************\
+ ========================================
+   Sliding attacks for magic bitboard
+ ========================================
+\****************************************/
+#pragma region
+//doesnt go to board edge
+inline U64 mask_bishop_attacks(int square)
+{
+	U64 attacks = 0ULL;
+
+	//target file(x) & rank(y)
+	int tx = square % 8, ty = square / 8;
+
+	for (int x = tx + 1, y = ty + 1; x <= 6 && y <= 6; ++x, ++y) attacks |= (1ULL << (y * 8 + x));
+	for (int x = tx + 1, y = ty - 1; x <= 6 && y >= 1; ++x, --y) attacks |= (1ULL << (y * 8 + x));
+	for (int x = tx - 1, y = ty + 1; x >= 1 && y <= 6; --x, ++y) attacks |= (1ULL << (y * 8 + x));
+	for (int x = tx - 1, y = ty - 1; x >= 1 && y >= 1; --x, --y) attacks |= (1ULL << (y * 8 + x));
+
+	return attacks;
+}
+inline U64 mask_rook_attacks(int square)
+{
+	U64 attacks = 0ULL;
+
+	//target file(x) & rank(y)
+	int tx = square % 8, ty = square / 8;
+
+	for (int x = tx + 1; x <= 6; ++x) attacks |= (1ULL << (ty * 8 + x));
+	for (int x = tx - 1; x >= 1; --x) attacks |= (1ULL << (ty * 8 + x));
+	for (int y = ty + 1; y <= 6; ++y) attacks |= (1ULL << (y * 8 + tx));
+	for (int y = ty - 1; y >= 1; --y) attacks |= (1ULL << (y * 8 + tx));
+
+	return attacks;
+}
+
+//attacks on the fly, goes to bord edge with blocker
+inline U64 bishop_blocker_attacks(int square, U64 block)
+{
+	U64 attacks = 0ULL;
+	int x, y;
+	//target file(x) & rank(y)
+	int tx = square % 8, ty = square / 8;
+
+	for (x = tx + 1, y = ty + 1; x <= 7 && y <= 7; ++x, ++y)
+	{
+		attacks |= (1ULL << (y * 8 + x));
+		if (block & (1ULL << (y * 8 + x))) break;
+	}
+	for (x = tx + 1, y = ty - 1; x <= 7 && y >= 0; ++x, --y)
+	{
+		attacks |= (1ULL << (y * 8 + x));
+		if (block & (1ULL << (y * 8 + x))) break;
+	}
+	for (x = tx - 1, y = ty + 1; x >= 0 && y <= 7; --x, ++y)
+	{
+		attacks |= (1ULL << (y * 8 + x));
+		if (block & (1ULL << (y * 8 + x))) break;
+	}
+	for (x = tx - 1, y = ty - 1; x >= 0 && y >= 0; --x, --y)
+	{
+		attacks |= (1ULL << (y * 8 + x));
+		if (block & (1ULL << (y * 8 + x))) break;
+	}
+	return attacks;
+}
+inline U64 rook_blocker_attacks(int square, U64 block)
+{
+	U64 attacks = 0ULL;
+
+	//target file(x) & rank(y)
+	int tx = square % 8, ty = square / 8;
+
+	for (int x = tx + 1; x <= 7; ++x)
+	{
+		attacks |= (1ULL << (ty * 8 + x));
+		if (block & (1ULL << (ty * 8 + x))) break;
+	}
+	for (int x = tx - 1; x >= 0; --x)
+	{
+		attacks |= (1ULL << (ty * 8 + x));
+		if (block & (1ULL << (ty * 8 + x))) break;
+	}
+	for (int y = ty + 1; y <= 7; ++y)
+	{
+		attacks |= (1ULL << (y * 8 + tx));
+		if (block & (1ULL << (y * 8 + tx))) break;
+	}
+	for (int y = ty - 1; y >= 0; --y)
+	{
+		attacks |= (1ULL << (y * 8 + tx));
+		if (block & (1ULL << (y * 8 + tx))) break;
+	}
+
+	return attacks;
+}
 #pragma endregion

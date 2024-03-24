@@ -24,6 +24,22 @@ add_executable(CrusherChess
         CrusherChess/src/types.h
         CrusherChess/src/macros.h
         CrusherChess/src/random.h
+        CrusherChess/src/uci.h
+        CrusherChess/src/uci.cpp
+        CrusherChess/src/movegen.h
+        CrusherChess/src/movegen.cpp
+        CrusherChess/src/magics.cpp
+        CrusherChess/src/magics.h
+        CrusherChess/src/bitoperations.cpp
+        CrusherChess/src/bitoperations.h
+        CrusherChess/src/zobristkeys.h
+        CrusherChess/src/zobristkeys.cpp
+        CrusherChess/src/transposition.cpp
+        CrusherChess/src/transposition.h
+        CrusherChess/src/typedefs.h
+        CrusherChess/src/hash.h
+        CrusherChess/src/moves.h
+        CrusherChess/src/types.cpp
 )
 
 add_executable(TestExecutable

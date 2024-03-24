@@ -1,8 +1,27 @@
 #include <cstdio>
-#include "types.h"
+#include <iostream>
+#include <format>
 #include "Debug.h"
+#include "moves.h"
+#include "bitoperations.h"
+#include "movegen.h"
+#include "types.h"
 
-/*
+
+//for uci
+std::string get_move_string(int move)
+{
+	if (get_move_promoted(move))
+		return std::format("{}{}{}",
+			square_to_coordinates[get_move_source(move)],
+			square_to_coordinates[get_move_target(move)],
+			promoted_pieces.at(get_move_promoted(move)));
+	else
+		return std::format("{}{}",
+			square_to_coordinates[get_move_source(move)],
+			square_to_coordinates[get_move_target(move)]);
+}
+
 void print_move_list(Moves* move_list)
 {
 	// do nothing on empty move list
@@ -51,10 +70,11 @@ void test_move_encoding()
 
 void print_moves_scores(Moves* moves)
 {
+    throw std::runtime_error("Function not implemented");
 	std::cout << "move scores:" << custom_endl;
 	for (int i = 0; i < moves->count; i++)
 	{
-        std::cout << get_move_string(moves->moves[i]) << " score: " << score_move(moves->moves[i]) << custom_endl;
+        //std::cout << get_move_string(moves->moves[i]) << " score: " << score_move(moves->moves[i]) << custom_endl;
 	}
 }
 
@@ -85,48 +105,49 @@ void print_attacked_squares(int side)
 
 std::string get_fen_Stocfish_Version_not_working()
 {
-	int emptyCnt;
-	std::ostringstream ss;
+    throw std::runtime_error("Function not implemented");
 
-	const std::string PieceToChar("pnbrqkPNBRQK");
-
-	for (int r = 7; r >= 0; --r)
-	{
-		for (int f = 0; f <= 7; ++f)
-		{
-			for (emptyCnt = 0; f <= 7 && (get_piece(f, r) == -1); ++f)
-				++emptyCnt;
-
-			if (emptyCnt)
-				ss << emptyCnt;
-
-			if (f <= 7)
-			{
-				int piece = get_piece(f, r);
-
-				if (piece != -1)
-					ss << PieceToChar[piece];
-				else
-					ss << ' ';
-			}
-		}
-
-		if (r > 0)
-			ss << '/';
-	}
-
-	ss << (side == WHITE ? " w " : " b ");
-
-	if (castle & 1)		ss << 'K';
-	if (castle & 2)		ss << 'Q';
-	if (castle & 4)		ss << 'k';
-	if (castle & 8)		ss << 'q';
-	if (!(castle & 15))	ss << '-';
-
-	ss << (enpassant == NO_SQ ? " - " : " " + std::string(square_to_coordinates[enpassant]) + " ");
-
-	//need to add half and full move counters
-
-	return ss.str();
+//	int emptyCnt;
+//	std::ostringstream ss;
+//
+//	const std::string PieceToChar("pnbrqkPNBRQK");
+//
+//	for (int r = 7; r >= 0; --r)
+//	{
+//		for (int f = 0; f <= 7; ++f)
+//		{
+//			for (emptyCnt = 0; f <= 7 && (get_piece(f, r) == -1); ++f)
+//				++emptyCnt;
+//
+//			if (emptyCnt)
+//				ss << emptyCnt;
+//
+//			if (f <= 7)
+//			{
+//				int piece = get_piece(f, r);
+//
+//				if (piece != -1)
+//					ss << PieceToChar[piece];
+//				else
+//					ss << ' ';
+//			}
+//		}
+//
+//		if (r > 0)
+//			ss << '/';
+//	}
+//
+//	ss << (side == WHITE ? " w " : " b ");
+//
+//	if (castle & 1)		ss << 'K';
+//	if (castle & 2)		ss << 'Q';
+//	if (castle & 4)		ss << 'k';
+//	if (castle & 8)		ss << 'q';
+//	if (!(castle & 15))	ss << '-';
+//
+//	ss << (enpassant == NO_SQ ? " - " : " " + std::string(square_to_coordinates[enpassant]) + " ");
+//
+//	//need to add half and full move counters
+//
+//	return ss.str();
 }
- */
