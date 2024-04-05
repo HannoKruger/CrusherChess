@@ -28,6 +28,7 @@ std::string get_move_string(int move)
 			square_to_coordinates[get_move_target(move)]);
 }
 
+
 void print_move_list(Moves* move_list)
 {
 	// do nothing on empty move list
@@ -162,7 +163,6 @@ std::string get_fen_Stocfish_Version_not_working()
 		   Debug + Input & output
  ========================================
 \****************************************/
-#pragma region
 
 
 class TextAttr
@@ -337,7 +337,3 @@ void print_board(bool ascii)
 
 	printf("Key: %llx\n\n", hash_key);
 }
-
-
-
-#pragma endregion

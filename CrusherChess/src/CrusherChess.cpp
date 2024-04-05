@@ -1,38 +1,14 @@
-﻿//#define DEBUG
-
-//includes
-#pragma region
-
-#define NOMINMAX
-
-#include <stack>
-#include <iostream>
-#include <cassert>
-#include <string>
-#include <io.h>
-#include <chrono>
-#include <vector>
-#include <ostream>
-
-
+﻿#include <cassert>
 #include "types.h"
-#include "movegen.h"
 #include "magics.h"
 #include "transposition.h"
-#include "zobristkeys.h"
+#include "zobristKeys.h"
 #include "uci.h"
+#include "perft.h"
+#include "evaluation.h"
 
+//#define DEBUG
 
-
-#pragma warning(disable:6031)
-
-
-/****************************************\
- ========================================
-			 Initialization
- ========================================
-\****************************************/
-#pragma region
 void init_leapers_attacks()
 {
 	for (int square = 0; square < SQUARE_NB; ++square)
@@ -122,454 +98,42 @@ void init_all()
    
 	parse_fen(start_position);
 }
-#pragma endregion
 
-/****************************************\
- ========================================
-				 Perft
- ========================================
-\****************************************/
-#pragma region
-
-//std::set<U64> keys;
-//std::vector<U64> collisions;
-
-
-
-static inline void perft_driver(int depth)
-{
-	//escape
-	if (depth <= 0)
-	{
-		nodes++;
-		return;
-	}
-
-	Moves move_list[1];
-	generate_moves(move_list);
-
-	for (int move_count = 0; move_count < move_list->count; move_count++)
-	{
-		// preserve board state
-		copy_board();
-
-
-		// make move
-		if (!make_move(move_list->moves[move_count]))
-		{
-			take_back();
-			continue;
-		}
-
-		//auto t = keys.insert(hash_key);
-
-		//if (t.second)
-		//{
-			//does not exist in set
-		//}
-		//else
-		//{
-			//collisions.push_back(hash_key);
-			//std::cout << "Collision! " << "length:" << keys.size() << custom_endl;
-
-			//print_board();
-		//}
-
-		// call perft driver recursively
-		perft_driver(depth - 1);
-
-		// take back
-		take_back();
-	}
-}
-
-void perft_test(int depth)
-{
-	auto startTime = std::chrono::high_resolution_clock::now();
-
-	Moves move_list[1];
-	generate_moves(move_list);
-
-	if (depth > 0)
-	{
-		for (int move_count = 0; move_count < move_list->count; move_count++)
-		{
-			// preserve board state
-			copy_board();
-
-			auto move = move_list->moves[move_count];
-
-			// make move
-			if (!make_move(move))
-			{
-				take_back();
-				continue;
-			}
-
-			//auto t = keys.insert(hash_key);
-
-			//if (t.second)
-			//{
-				//does not exist in set
-			//}
-			//else
-			//{
-				//std::cout << "Collision! " << "length:" << keys.size() << custom_endl;
-			//	collisions.push_back(hash_key);
-
-				//print_board();
-			//}
-
-			U64 cumulative_nodes = nodes;
-
-			// call perft driver recursively
-			perft_driver(depth - 1);
-
-			U64 current_nodes = nodes - cumulative_nodes;
-
-			// take back
-			take_back();
-
-            const int promoted = get_move_promoted(move);
-            std::cout <<
-            square_to_coordinates[get_move_source(move)] <<
-            square_to_coordinates[get_move_target(move)] <<
-            (promoted ? promoted_pieces.at(promoted) : ' ') <<
-            " nodes: " << current_nodes << custom_endl;
-		}
-	}
-	else nodes++;
-
-	auto endTime = std::chrono::high_resolution_clock::now();
-
-	auto elapsedMicro = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count();
-	auto elapsedMS = ((long double)elapsedMicro) / 1000;
-	auto elapsedS = elapsedMS / 1000;
-
-	printf("\nDepth:%d\n", depth);
-	printf("Nodes:%llu\n", nodes);
-	printf("Total Time:%.2LF (MS)\n", elapsedMS);
-	//printf("Seconds:%.2LF (S)\n", elapsedS);
-	printf("Nodes per second:%.0LF\n\n", (nodes / elapsedS));
-}
-
-#pragma endregion
-/****************************************\
- ========================================
-			   Simple Search
- ========================================
-\****************************************/
-#pragma region
-
-const int piece_scores[12] = { 10, 30, 31, 50, 90, 2000, -10, -30, -31, -50, -90, -2000 };
-
-
-static inline int Mposition_evaluate(int cnt, int depth)
-{
-
-	/*if (bitboards[K] == 0 || bitboards[k] == 0)
-	{
-		print_board();
-		printf("Errr king missing");
-		std::cin.get();
-		assert(0 && "King is missing");
-	}*/
-
-	/*if (bitboards[K] == 0)
-		return 30000;
-	if (bitboards[k] == 0)
-		return -30000;*/
-
-
-
-
-
-	if (cnt == 0)
-	{
-		//printf("count was zero!!!!\n");
-
-
-		if (is_square_attacked(get_lsb_index(bitboards[K]), BLACK))//white king attacked by black
-		{
-			//printf("white is mate\n");
-
-			if (depth <= 0)
-				return -2000;
-
-			return -2000 * depth;
-		}
-
-		if (is_square_attacked(get_lsb_index(bitboards[k]), WHITE))//black king attacked by white
-		{
-			//printf("black is mate\n");
-
-			if (depth <= 0)
-				return 2000;
-
-			return 2000 * depth;
-		}
-
-		//printf("stalemate\n");
-		return 0;
-
-	}
-
-
-	int score = 0;
-
-
-	for (int i = P; i <= k; i++)
-		score += ((count_bits(bitboards[i]) + depth) * piece_scores[i]);
-	//printf("score:%d\n",score);
-	return score;
+void printArch() {
+    #if defined(__x86_64__) || defined(_M_X64)
+    // 64-bit architecture specific code
+    #if defined(_WIN32) || defined(_WIN64)
+        std::cout << "Compiled for 64-bit Windows." << std::endl;
+    #elif defined(__APPLE__)
+        std::cout << "Compiled for 64-bit macOS." << std::endl;
+    #elif defined(__linux__)
+        std::cout << "Compiled for 64-bit Linux." << std::endl;
+    #else
+        std::cout << "Compiled for 64-bit on an unknown platform." << std::endl;
+    #endif
+    #elif defined(__i386) || defined(_M_IX86)
+    // 32-bit architecture specific code
+    #if defined(_WIN32) || defined(_WIN64)
+        std::cout << "Compiled for 32-bit Windows." << std::endl;
+    #elif defined(__APPLE__)
+        std::cout << "Compiled for 32-bit macOS." << std::endl;
+    #elif defined(__linux__)
+        std::cout << "Compiled for 32-bit Linux." << std::endl;
+    #else
+        std::cout << "Compiled for 32-bit on an unknown platform." << std::endl;
+    #endif
+    #else
+    std::cout << "Compiled for an unknown architecture and platform." << std::endl;
+    #endif
 }
 
 
-static inline int MMiniMax(int depth, bool Maximizing)
-{
-	Moves moves[1];
-	generate_moves(moves);
-
-	int cnt = 0;
-	for (int i = 0; i < moves->count; i++)
-	{
-		copy_board();
-		if (!make_move(moves->moves[i]))
-		{
-			take_back();
-			continue;
-		}
-		take_back();
-
-		//moves->legal[i] = moves->moves[i];
-
-		//legal[cnt++] = moves->moves[i];	
-		cnt++;
-	}
-
-	if (depth == 0 || cnt == 0)
-		return Mposition_evaluate(cnt, depth);
-
-	if (Maximizing)//white
-	{
-		int maxeval = INT_MIN;
-
-		for (int i = 0; i < moves->count; i++)
-		{
-			copy_board();
-
-			if (!make_move(moves->moves[i]))
-			{
-				take_back();
-				continue;
-			}
-
-
-			int eval = MMiniMax(depth - 1, false);
-
-			take_back();
-
-
-			maxeval = std::max(maxeval, eval);
-		}
-		return maxeval;
-	}
-	else//black
-	{
-		int mineval = INT_MAX;
-
-		for (int i = 0; i < moves->count; i++)
-		{
-			copy_board();
-
-			if (!make_move(moves->moves[i]))
-			{
-				take_back();
-				continue;
-			}
-
-			int eval = MMiniMax(depth - 1, true);
-
-			take_back();
-
-
-			mineval = std::min(mineval, eval);
-		}
-		return mineval;
-	}
-}
-
-
-////not working
-//int legal[255];
-//
-//static inline int MiniMaxV2(int depth, bool Maximizing)
-//{
-//	Moves moves[1];
-//	generate_moves(moves);
-//
-//	int cnt = 0;
-//	for (int i = 0; i < moves->count; i++)
-//	{
-//		copy_board();
-//		if (!make_move(moves->moves[i], ALL_MOVES))
-//		{
-//			take_back();
-//			continue;
-//		}
-//		take_back();
-//
-//		legal[cnt] = moves->moves[i];
-//		cnt++;
-//	}
-//
-//	if (depth == 0 || cnt == 0)
-//		return position_evaluate(cnt,depth);
-//
-//	if (Maximizing)//white
-//	{
-//		int maxeval = INT_MIN;
-//
-//		for (int i = 0; i < cnt; i++)
-//		{
-//			copy_board();
-//			
-//			make_move(legal[i], ALL_MOVES);
-//
-//			int eval = MiniMaxV2(depth - 1, false);
-//
-//			take_back();
-//
-//
-//			maxeval = std::max(maxeval, eval);
-//		}
-//		return maxeval;
-//	}
-//	else//black
-//	{
-//		int mineval = INT_MAX;
-//
-//		for (int i = 0; i < cnt; i++)
-//		{
-//			copy_board();
-//		
-//			make_move(legal[i], ALL_MOVES);
-//
-//			int eval = MiniMaxV2(depth - 1, true);
-//
-//			take_back();
-//
-//
-//			mineval = std::min(mineval, eval);
-//		}
-//		return mineval;
-//	}
-//}
-
-
-int Mget_best_move(int depth)
-{
-	Moves moves[1];
-	generate_moves(moves);
-
-	std::vector<int> bestmoves;
-
-	printf("\nCount: %d\n", (moves->count));
-
-	if (side == WHITE)
-	{
-		int bestScore = INT_MIN;
-
-		for (int i = 0; i < moves->count; i++)//paralize this
-		{
-			copy_board();
-
-			if (!make_move(moves->moves[i]))
-			{
-				take_back();
-				continue;
-			}
-
-			int eval = MMiniMax(depth - 1, false);
-
-            std::cout << "no" << (i + 1) << "  score: " << eval << "  move:";
-			std::cout << get_move_string(moves->moves[i]) << custom_endl;
-
-			take_back();
-
-			if (eval >= bestScore)
-			{
-				if (eval == bestScore)
-					bestmoves.push_back(moves->moves[i]);
-				else
-				{
-					printf("White new eval:%d\n", eval);
-					bestmoves.clear();
-					bestmoves.push_back(moves->moves[i]);
-					bestScore = eval;
-				}
-			}
-		}
-	}
-	else
-	{
-		int bestScore = INT_MAX;
-
-		for (int i = 0; i < moves->count; i++)//paralize this
-		{
-			copy_board();
-
-			if (!make_move(moves->moves[i]))
-			{
-				take_back();
-				continue;
-			}
-
-			int eval = MMiniMax(depth - 1, true);
-			printf("no%d  score: %d  move:", (i + 1), eval);
-			std::cout << get_move_string(moves->moves[i]) << custom_endl;
-
-			take_back();
-
-			if (eval <= bestScore)
-			{
-				if (eval == bestScore)
-					bestmoves.push_back(moves->moves[i]);
-				else
-				{
-                    std::cout << "black new eval:" << eval << custom_endl;
-
-					bestmoves.clear();
-					bestmoves.push_back(moves->moves[i]);
-					bestScore = eval;
-				}
-			}
-		}
-	}
-	return bestmoves[rand() % bestmoves.size()];
-}
-
-void Msearch_position(int depth)
-{
-	printf("depth:%d\n", depth);
-
-	int best = Mget_best_move(depth);
-
-    std::cout << "bestmove " << get_move_string(best);
-}
-
-#pragma endregion
-/****************************************\
- ========================================
-				 Main
- ========================================
-\****************************************/
-
-
-//#define DEBUG
+#define DEBUG
 
 int main()
-{ 
+{
+    printArch();
+
 	//setvbuf(stdout, NULL, _IONBF, 0);
 	//std::cout.setf(std::ios_base::unitbuf);
 

@@ -1,7 +1,7 @@
 #include <cstring>
 #include "movegen.h"
 #include "bitoperations.h"
-#include "zobristkeys.h"
+#include "zobristKeys.h"
 #include "magics.h"
 
 

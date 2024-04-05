@@ -6,7 +6,7 @@
 #include "evaluation.h"
 #include "movegen.h"
 #include "transposition.h"
-#include "zobristkeys.h"
+#include "zobristKeys.h"
 
 
 //killer moves [id][ply]

@@ -1,5 +1,5 @@
 #include "random.h"
-#include "zobristkeys.h"
+#include "zobristKeys.h"
 /****************************************\
  ========================================
 			 Zobrist keys

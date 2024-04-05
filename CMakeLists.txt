@@ -32,8 +32,8 @@ add_executable(CrusherChess
         CrusherChess/src/magics.h
         CrusherChess/src/bitoperations.cpp
         CrusherChess/src/bitoperations.h
-        CrusherChess/src/zobristkeys.h
-        CrusherChess/src/zobristkeys.cpp
+        CrusherChess/src/zobristKeys.h
+        CrusherChess/src/zobristKeys.cpp
         CrusherChess/src/transposition.cpp
         CrusherChess/src/transposition.h
         CrusherChess/src/typedefs.h
@@ -44,6 +44,10 @@ add_executable(CrusherChess
         CrusherChess/src/search.h
         CrusherChess/src/evaluation.cpp
         CrusherChess/src/evaluation.h
+        CrusherChess/src/perft.cpp
+        CrusherChess/src/perft.h
+        CrusherChess/src/simpleSearch.cpp
+        CrusherChess/src/simpleSearch.h
 )
 
 add_executable(TestExecutable
