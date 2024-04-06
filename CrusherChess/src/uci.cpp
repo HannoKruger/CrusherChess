@@ -8,6 +8,8 @@
 #include <io.h>
 #include <cassert>
 #include <winbase.h>
+#else
+#include <unistd.h>
 #endif
 
 
@@ -15,7 +17,6 @@
 #include <cstdio>
 #include <iostream>
 #include <cstring>
-#include <unistd.h>
 #include <cassert>
 #include "uci.h"
 #include "transposition.h"
