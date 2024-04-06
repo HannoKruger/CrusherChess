@@ -14,6 +14,7 @@ void parse_position(const char* command);
 int get_piece_count();
 void parse_go(const char* command);
 void uci_loop();
+U64 get_time_ms64();
 
 int input_waiting();
 void read_input();

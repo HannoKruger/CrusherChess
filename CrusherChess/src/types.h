@@ -6,7 +6,9 @@
 #include "typedefs.h"
 #include "Debug.h"
 #include "bitoperations.h"
+#include "platform_defs.h"
 
+using namespace CrusherChess;
 
 #define MAX_HASH 32768
 //max reachable ply
@@ -163,7 +165,12 @@ constexpr const char* ascii_pieces = "PNBRQKpnbrqk";
 //\u265A
 
 //FE0E is a variation selector-15, it forces the black and white pieces to be displayed as text, not as emoji
+#ifdef WINDOWS
 constexpr const wchar_t* unicode_pieces[12] = { L"\u265F\uFE0E", L"\u265E\uFE0E", L"\u265D\uFE0E", L"\u265C\uFE0E", L"\u265B\uFE0E", L"\u265A\uFE0E",  L"\u2659\uFE0E", L"\u2658\uFE0E", L"\u2657\uFE0E", L"\u2656\uFE0E",L"\u2655\uFE0E", L"\u2654\uFE0E" };
+#else
+//constexpr const char* unicode_pieces[12] = { "♙", "♘", "♗", "♖", "♕", "♔", "♟︎", "♞", "♝", "♜", "♛", "♚" };
+constexpr const char* unicode_pieces[12] = { "\u265F", "\u265E", "\u265D", "\u265C", "\u265B", "\u265A", "\u2659", "\u2658", "\u2657", "\u2656","\u2655", "\u2654" };
+#endif
 
 
 //convert ascii character pieces to constants

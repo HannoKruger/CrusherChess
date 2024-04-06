@@ -1,14 +1,22 @@
 #define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#include <cstdlib>
-#include <iostream>
-#include <sysinfoapi.h>
 
+#include "platform_defs.h"
+#ifdef WINDOWS
+#include <windows.h>
+#include <sysinfoapi.h>
 #include <wincon.h>
 #include <io.h>
 #include <cassert>
 #include <winbase.h>
+#endif
 
+
+#include <cstdlib>
+#include <cstdio>
+#include <iostream>
+#include <cstring>
+#include <unistd.h>
+#include <cassert>
 #include "uci.h"
 #include "transposition.h"
 #include "hash.h"
@@ -16,14 +24,11 @@
 #include "search.h"
 
 
-
 bool quit = false; // exit engine flag
 bool time_set = false; // time control availability
 bool stopped = false; // when time is up
 U64 start_time = 0ULL; // uci starttime command
 U64 stop_time = 0ULL; // uci stoptime command
-
-
 
 
 
@@ -46,12 +51,8 @@ U64 stop_time = 0ULL; // uci stoptime command
 
 int input_waiting()
 {
-	//must be windows
-
-	//linux
-	return 0;
-
-	static int init = 0, pipe;
+    #ifdef WINDOWS
+    static int init = 0, pipe;
 	static HANDLE inh;
 	DWORD dw;
 
@@ -77,6 +78,16 @@ int input_waiting()
 		GetNumberOfConsoleInputEvents(inh, &dw);
 		return dw <= 1 ? 0 : dw;
 	}
+    #else
+	 fd_set readfds;
+        struct timeval tv;
+        FD_ZERO (&readfds);
+        FD_SET (fileno(stdin), &readfds);
+        tv.tv_sec=0; tv.tv_usec=0;
+        select(16, &readfds, nullptr, nullptr, &tv);
+
+        return (FD_ISSET(fileno(stdin), &readfds));
+    #endif
 }
 
 // read GUI/user input
@@ -98,7 +109,11 @@ void read_input()
 		do
 		{
 			// read bytes from STDIN
-			bytes = _read(_fileno(stdin), input, 256);
+            #ifdef WINDOWS
+			bytes = _read(_fileno(stdin), input, sizeof(input));
+            #else
+            bytes = read(STDIN_FILENO, input, sizeof(input));
+            #endif
 		}
 		while (bytes < 0);//read until bytes available then break
 
@@ -117,22 +132,32 @@ void read_input()
 				// tell engine to terminate exacution
 				quit = true;
 			}
-
-
-			//else if (!strncmp(input, "stop", 4))
-			//{
-			//	// tell engine to terminate exacution
-			//	quit = true;
-			//}
 		}
 	}
+}
+
+U64 get_time_ms64()
+{
+    #ifdef WINDOWS
+        return GetTickCount64();
+    #else
+//        struct timeval time_value;
+//        gettimeofday(&time_value, NULL);
+//        return time_value.tv_sec * 1000 + time_value.tv_usec / 1000;
+
+    struct timespec ts;
+    // CLOCK_MONOTONIC represents the elapsed time since some unspecified starting point
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    // Convert seconds and nanoseconds to milliseconds
+    return static_cast<uint64_t>(ts.tv_sec) * 1000 + static_cast<uint64_t>(ts.tv_nsec) / 1000000;
+    #endif
 }
 
 // a bridge function to interact between search and GUI input
 void communicate()
 {
 	// if time is up break here
-	if (time_set == 1 && GetTickCount64() > stop_time)
+    if (time_set == 1 && get_time_ms64() > stop_time)
 	{
 		// tell engine to stop calculating
 		stopped = true;
@@ -463,7 +488,7 @@ void parse_go(const char* command)
 	}
 
 	// init start time
-	start_time = GetTickCount64();
+	start_time = get_time_ms64();
 
 	// if time control is available
 	if (time_set)
@@ -580,7 +605,9 @@ void uci_loop()
 			int mb = 64;
 
 			// init MB
-			sscanf_s(input, "%*s %*s %*s %*s %d", &mb);
+			//sscanf_s(input, "%*s %*s %*s %*s %d", &mb);
+            sscanf(input, "%*s %*s %*s %*s %d", &mb);
+            //strtol(input, NULL, 10);
 
 			// adjust MB if going beyond the allowed bounds
 			if (mb < 1) mb = 1;

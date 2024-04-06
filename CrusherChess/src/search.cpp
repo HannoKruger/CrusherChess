@@ -1,6 +1,6 @@
 #include <cassert>
 #include <cstring>
-#include <sysinfoapi.h>
+
 #include "search.h"
 #include "uci.h"
 #include "evaluation.h"
@@ -14,6 +14,9 @@ int killer_moves[2][MAX_PLY] = {};
 
 //history moves [piece][square]
 int history_moves[12][SQUARE_NB] = {};
+
+#define FALSE 0
+#define TRUE 1
 
 
 /*
@@ -575,7 +578,7 @@ void search_position(int depth)
         std::cout <<
         " depth " <<current_depth <<
         " nodes " << nodes <<
-        " time " << (GetTickCount64() - start_time) <<
+        " time " << (get_time_ms64() - start_time) <<
         " pv ";
 
 		//loop over pv line
@@ -583,7 +586,7 @@ void search_position(int depth)
             std::cout << get_move_string(pv_table[0][i]) << " ";
 		std::cout << custom_endl;
 
-		if (time_set && GetTickCount64() + 4 > stop_time)
+		if (time_set && get_time_ms64()  + 4 > stop_time)
 		{
 			//stopped = true;
 

@@ -1,10 +1,13 @@
-#include  <windows.h>
+#include "platform_defs.h"
+
+#if defined WINDOWS
+#include <windows.h>
+#endif
+
 #include <cstdio>
 #include <iostream>
-#include <format>
 #include <cassert>
 #include <sstream>
-
 #include "Debug.h"
 #include "moves.h"
 #include "bitoperations.h"
@@ -12,20 +15,157 @@
 #include "types.h"
 #include "search.h"
 
+namespace CrusherChess {
+
+
+enum colors { BLACK = 0, RED, GREEN, YELLOW, BLUE, PURPLE, CYAN, GREY,
+             LIGHTGREY, LIGHTRED, LIGHTGREEN, LIGHTYELLOW, LIGHTBLUE,
+             LIGHTPURPLE, LIGHTCYAN, WHITE, DEFAULT };
+
+void consoleColor(colors foregroundColor = DEFAULT, colors backgroundColor = DEFAULT) {
+
+    #ifdef WINDOWS
+    HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (foregroundColor == DEFAULT) foregroundColor = WHITE; // Assuming default text color is white
+    if (backgroundColor == DEFAULT) backgroundColor = BLACK; // Assuming default background color is black
+    WORD winColor = (backgroundColor << 4) | foregroundColor;
+    SetConsoleTextAttribute(hConsole, winColor);
+    #else
+
+  // Reset styles
+    std::cout << "\x1B[0m";
+
+    // Set foreground color
+    if (foregroundColor == DEFAULT) {
+        std::cout << "\x1B[39m"; // Default foreground color
+    } else if (foregroundColor == BLACK) {
+        std::cout << "\x1B[30m"; // Black
+    } else if (foregroundColor == WHITE) {
+        std::cout << "\x1B[97m"; // Bright white (normal white is 37)
+    } else if (foregroundColor > GREY && foregroundColor < DEFAULT) { // Bright colors excluding white
+        std::cout << "\x1B[9" << (foregroundColor - LIGHTGREY) << "m";
+    } else if (foregroundColor <= GREY) { // Normal colors
+        std::cout << "\x1B[3" << foregroundColor << "m";
+    }
+
+    // Set background color
+    if (backgroundColor == DEFAULT) {
+        std::cout << "\x1B[49m"; // Default background color
+    } else if (backgroundColor == BLACK) {
+        std::cout << "\x1B[40m"; // Black
+    } else if (backgroundColor == WHITE) {
+        std::cout << "\x1B[107m"; // Bright white (normal white is 47)
+    } else if (backgroundColor > GREY && backgroundColor < DEFAULT) { // Bright colors excluding white
+        std::cout << "\x1B[10" << (backgroundColor - LIGHTGREY) << "m";
+    } else if (backgroundColor <= GREY) { // Normal colors
+        std::cout << "\x1B[4" << backgroundColor << "m";
+    }
+    #endif
+}
+
+
+void print_board(bool ascii) {
+
+    printf("\n");
+
+#if defined(WINDOWS)
+    HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
+    DWORD written = 0;
+#endif
+
+    for (int rank = 0, square = 0; rank < 8; rank++) {
+
+        //std::cout << TextAttr(FOREGROUND_WHITE);
+        consoleColor();
+
+        printf("%d ", 8 - rank);
+
+        for (int file = 0; file < 8; file++, square++) {
+            int piece = -1;
+
+            // Loop over all the pieces
+            for (int bb_piece = P; bb_piece <= k; bb_piece++) {
+                if (get_bit(bitboards[bb_piece], square))
+                    piece = bb_piece;
+            }
+
+            //((square + rank + 1) % 2) ? std::cout << TextAttr(BACKGROUND_WHITE) : std::cout << TextAttr(FOREGROUND_WHITE);
+            if ((square + rank + 1) % 2)
+                //std::cout << BACKGROUND_WHITE;
+                consoleColor(BLACK, WHITE);
+            else
+                //std::cout << FOREGROUND_WHITE;
+                consoleColor(WHITE, BLACK);
+
+            if (piece != -1) {
+                if (ascii) {
+                    printf("%c ", ascii_pieces[piece]);
+                } else {
+
+                     if ((square + rank + 1) % 2)
+					{
+						if (piece > 5)
+							piece -= 6;
+						else
+							piece += 6;
+					}
+
+#if defined(WINDOWS)
+
+//					if (piece == P)
+//						WriteConsoleW(handle, unicode_pieces[piece], 1, &written, NULL);
+//					else
+					{
+						WriteConsoleW(handle, unicode_pieces[piece], 1, &written, NULL);
+						WriteConsoleW(handle, L" ", 1, &written, NULL);
+					}
+#else
+                    std::cout << unicode_pieces[piece] << "\u2009";
+#endif
+                }
+            } else {
+                //#ifdef WINDOWS
+                std::cout << "  ";
+                //#else
+                //std::cout << "\u2009\u2009";
+               // #endif
+            }
+        }
+        #ifdef WINDOWS
+        //std::cout << TextAttr(FOREGROUND_WHITE);
+        #else
+        //std::cout << TextAttr(RESET_COLOR);
+        //consoleColor();
+        #endif
+        consoleColor();
+        printf("\n");
+    }
+
+    printf("  a b c d e f g h\n\n");
+
+    printf("Side: %s\n", side ? "Black" : "White");
+    printf("En Passant: %s\n", (enpassant != NO_SQ) ? square_to_coordinates[enpassant] : "no");
+    printf("Castling: %c%c%c%c\n", (castle & WK) ? 'K' : '-', (castle & WQ) ? 'Q' : '-', (castle & BK) ? 'k' : '-', (castle & BQ) ? 'q' : '-');
+    std::cout << "Fen: " << get_fen() << std::endl;
+    printf("Key: %llx\n\n", hash_key);
+}
+
+
+
 
 
 //for uci
-std::string get_move_string(int move)
-{
-	if (get_move_promoted(move))
-		return std::format("{}{}{}",
-			square_to_coordinates[get_move_source(move)],
-			square_to_coordinates[get_move_target(move)],
-			promoted_pieces.at(get_move_promoted(move)));
-	else
-		return std::format("{}{}",
-			square_to_coordinates[get_move_source(move)],
-			square_to_coordinates[get_move_target(move)]);
+std::string get_move_string(int move) {
+    std::string source = square_to_coordinates[get_move_source(move)];
+    std::string target = square_to_coordinates[get_move_target(move)];
+
+    if (get_move_promoted(move)) {
+        char promotedChar = promoted_pieces.at(get_move_promoted(move));
+        std::string promoted(1, promotedChar);
+        return source + target + promoted;
+    } else {
+        return source + target;
+    }
 }
 
 
@@ -109,78 +249,12 @@ void print_attacked_squares(int side)
 	printf("  a b c d e f g h");
 }
 
-std::string get_fen_Stocfish_Version_not_working()
-{
-
-	int emptyCnt;
-	std::ostringstream ss;
-
-	const std::string PieceToChar("pnbrqkPNBRQK");
-
-	for (int r = 7; r >= 0; --r)
-	{
-		for (int f = 0; f <= 7; ++f)
-		{
-			for (emptyCnt = 0; f <= 7 && (get_piece(f, r) == -1); ++f)
-				++emptyCnt;
-
-			if (emptyCnt)
-				ss << emptyCnt;
-
-			if (f <= 7)
-			{
-				int piece = get_piece(f, r);
-
-				if (piece != -1)
-					ss << PieceToChar[piece];
-				else
-					ss << ' ';
-			}
-		}
-
-		if (r > 0)
-			ss << '/';
-	}
-
-	ss << (side == WHITE ? " w " : " b ");
-
-	if (castle & 1)		ss << 'K';
-	if (castle & 2)		ss << 'Q';
-	if (castle & 4)		ss << 'k';
-	if (castle & 8)		ss << 'q';
-	if (!(castle & 15))	ss << '-';
-
-	ss << (enpassant == NO_SQ ? " - " : " " + std::string(square_to_coordinates[enpassant]) + " ");
-
-	//need to add half and full move counters
-
-	return ss.str();
-}
-
 
 /****************************************\
  ========================================
 		   Debug + Input & output
  ========================================
 \****************************************/
-
-
-class TextAttr
-{
-	friend std::ostream& operator<<(std::ostream& out, TextAttr attr)
-	{
-		SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), attr.value);
-		return out;
-	}
-public:
-	explicit TextAttr(WORD attributes) : value(attributes) {}
-private:
-	WORD value;
-};
-
-#define FOREGROUND_WHITE (FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE)
-#define BACKGROUND_WHITE (BACKGROUND_RED | BACKGROUND_GREEN | BACKGROUND_BLUE)
-
 
 int get_piece(int file, int rank)
 {
@@ -261,79 +335,4 @@ void print_bitboard(U64 bitboard)
 	//print bitboard as unsigned number
 }
 
-
-
-
-void print_board(bool ascii)
-{
-	printf("\n");
-	HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
-	DWORD written = 0;
-
-	for (int rank = 0, square = 0; rank < 8; rank++)
-	{
-		std::cout << TextAttr(FOREGROUND_WHITE);
-		printf("%d ", 8 - rank);
-
-		for (int file = 0; file < 8; file++, square++)
-		{
-			int piece = -1;
-
-			//loop over all the pieces
-			for (int bb_piece = P; bb_piece <= k; bb_piece++)
-			{
-				if (get_bit(bitboards[bb_piece], square))
-					piece = bb_piece;
-			}
-
-			((square + rank + 1) % 2) ? std::cout << TextAttr(BACKGROUND_WHITE) : std::cout << TextAttr(FOREGROUND_WHITE);
-
-			if (piece != -1)
-			{
-				if (ascii)
-					printf("%c ", ascii_pieces[piece]);
-				else
-				{
-					if ((square + rank + 1) % 2)
-					{
-						if (piece > 5)
-							piece -= 6;
-						else
-							piece += 6;
-					}
-
-					//WriteConsoleW(handle, unicode_pieces[piece], 1, &written, NULL);
-
-//					if (piece == P)
-//						WriteConsoleW(handle, unicode_pieces[piece], 1, &written, NULL);
-//					else
-					{
-						WriteConsoleW(handle, unicode_pieces[piece], 1, &written, NULL);
-						WriteConsoleW(handle, L" ", 1, &written, NULL);
-					}
-				}
-			}
-			else
-				printf("  ");
-		}
-		std::cout << TextAttr(FOREGROUND_WHITE);
-		printf("\n");
-	}
-
-	printf("  a b c d e f g h\n\n");
-
-	printf("Side: %s\n", side ? "Black" : "White");
-
-	printf("En Passant: %s\n", (enpassant != NO_SQ) ? (square_to_coordinates[enpassant]) : "no");
-
-	printf("Castling: %c%c%c%c\n",
-		(castle & WK) ? 'K' : '-',
-		(castle & WQ) ? 'Q' : '-',
-		(castle & BK) ? 'k' : '-',
-		(castle & BQ) ? 'q' : '-'
-	);
-
-	std::cout << "Fen: " << get_fen() << custom_endl;
-
-	printf("Key: %llx\n\n", hash_key);
 }

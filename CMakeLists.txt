@@ -48,7 +48,8 @@ add_executable(CrusherChess
         CrusherChess/src/perft.h
         CrusherChess/src/simpleSearch.cpp
         CrusherChess/src/simpleSearch.h
+        CrusherChess/src/platform_defs.h
 )
 
-add_executable(TestExecutable
+add_executable(Test
         CrusherChess/tests/test.cpp)

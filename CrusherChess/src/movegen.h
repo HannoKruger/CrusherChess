@@ -1,4 +1,5 @@
 #pragma once
+#include <cstring>
 #include "moves.h"
 
 enum { ALL_MOVES, ONLY_CAPTURES };

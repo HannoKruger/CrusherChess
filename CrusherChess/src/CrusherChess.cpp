@@ -7,7 +7,8 @@
 #include "perft.h"
 #include "evaluation.h"
 
-//#define DEBUG
+using namespace CrusherChess;
+
 
 void init_leapers_attacks()
 {
@@ -103,11 +104,14 @@ void printArch() {
     #if defined(__x86_64__) || defined(_M_X64)
     // 64-bit architecture specific code
     #if defined(_WIN32) || defined(_WIN64)
+    #define WINDOWS
         std::cout << "Compiled for 64-bit Windows." << std::endl;
     #elif defined(__APPLE__)
         std::cout << "Compiled for 64-bit macOS." << std::endl;
+    #define MACOS
     #elif defined(__linux__)
         std::cout << "Compiled for 64-bit Linux." << std::endl;
+    #define LINUX
     #else
         std::cout << "Compiled for 64-bit on an unknown platform." << std::endl;
     #endif
@@ -115,10 +119,13 @@ void printArch() {
     // 32-bit architecture specific code
     #if defined(_WIN32) || defined(_WIN64)
         std::cout << "Compiled for 32-bit Windows." << std::endl;
+    #define WINDOWS
     #elif defined(__APPLE__)
         std::cout << "Compiled for 32-bit macOS." << std::endl;
+    #define MACOS
     #elif defined(__linux__)
         std::cout << "Compiled for 32-bit Linux." << std::endl;
+    #define LINUX
     #else
         std::cout << "Compiled for 32-bit on an unknown platform." << std::endl;
     #endif
@@ -128,7 +135,7 @@ void printArch() {
 }
 
 
-#define DEBUG
+//#define DEBUG
 
 int main()
 {
@@ -150,16 +157,16 @@ int main()
 #ifdef DEBUG
 		//tricky
 		//parse_fen("r3k2r/p1ppqpb1/1n2pnp1/3PN3/1p2P3/2N2Q1p/PPPB1PPP/R3K2R w KQkq - 0 1 ");
-        parse_fen("6Br/PP2k2P/6K1/8/nn6/b1n3n1/pppppp1p/4b3 w - - 0 1");
+        //parse_fen("6Br/PP2k2P/6K1/8/nn6/b1n3n1/pppppp1p/4b3 w - - 0 1");
 		//parse_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 ");
-		//parse_fen(start_position);
+		parse_fen(start_position);
 
 		print_board();
 
 		printf("score:%d\n", evaluate());
 
         std::cout << "\nRunning perft" << custom_endl;
-		perft_test(2);
+		perft_test(4);
 		
 		//auto startTime = std::chrono::high_resolution_clock::now();
 

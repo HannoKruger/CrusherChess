@@ -6,6 +6,15 @@
 #include "types.h"
 #include "simpleSearch.h"
 
+#ifndef INT_MIN
+#define INT_MIN (-2147483647 - 1)
+#endif
+#ifndef INT_MAX
+#define INT_MAX 2147483647
+#endif
+
+
+
 int Mposition_evaluate(int cnt, int depth)
 {
 
