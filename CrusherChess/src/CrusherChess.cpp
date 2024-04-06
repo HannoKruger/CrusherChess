@@ -4,8 +4,6 @@
 #include "transposition.h"
 #include "zobristKeys.h"
 #include "uci.h"
-#include "perft.h"
-#include "evaluation.h"
 
 using namespace CrusherChess;
 
