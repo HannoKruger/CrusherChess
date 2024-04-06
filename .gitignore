@@ -1,7 +1,7 @@
 CrusherChess/.vs/
 CrusherChess/x64/
-CrusherChess/CrusherChess/Release/
-CrusherChess/CrusherChess/x64/
+CrusherChess/src/Release/
+CrusherChess/src/x64/
 
 # User-specific stuff
 .idea/**/workspace.xml
@@ -77,3 +77,13 @@ fabric.properties
 
 # Android studio 3.1+ serialized cache file
 .idea/caches/build_file_checksums.ser
+
+
+#visual studio
+# Visual Studio work directory
+/.vs/
+# Visual Studio build directory
+/out/
+
+# clang-tidy output
+/clang-tidy-fixes.patch
