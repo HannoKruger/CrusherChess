@@ -3,7 +3,20 @@ project(CrusherChess)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_VERBOSE_MAKEFILE ON)
-set(CMAKE_EXE_LINKER_FLAGS "-static")
+
+if(WIN32)
+    set(CMAKE_EXE_LINKER_FLAGS "-static")
+endif()
+
+if(APPLE)
+    # Detects the system's architecture on macOS and sets it for the build
+    execute_process(COMMAND uname -m COMMAND tr -d '\n' OUTPUT_VARIABLE OSX_ARCH)
+    if("${OSX_ARCH}" STREQUAL "x86_64")
+        set(CMAKE_OSX_ARCHITECTURES "x86_64" CACHE STRING "Build architectures for Mac OS X")
+    elseif("${OSX_ARCH}" STREQUAL "arm64")
+        set(CMAKE_OSX_ARCHITECTURES "arm64" CACHE STRING "Build architectures for Mac OS X")
+    endif()
+endif()
 
 if(CMAKE_BUILD_TYPE MATCHES Debug)
     #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
