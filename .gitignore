@@ -44,6 +44,7 @@ CrusherChess/src/x64/
 
 # CMake
 cmake-build-*/
+build/*
 
 # Mongo Explorer plugin
 .idea/**/mongoSettings.xml
@@ -87,3 +88,5 @@ fabric.properties
 
 # clang-tidy output
 /clang-tidy-fixes.patch
+
+.idea/*

@@ -18,6 +18,7 @@
 #include <iostream>
 #include <cstring>
 #include <cassert>
+#include <cstdint>
 #include "uci.h"
 #include "transposition.h"
 #include "hash.h"
