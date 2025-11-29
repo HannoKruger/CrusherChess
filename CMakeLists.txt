@@ -1,5 +1,10 @@
 cmake_minimum_required(VERSION 3.27)
-project(CrusherChess)
+project(CrusherChess
+    VERSION 1.0.0
+    DESCRIPTION "A Bitboard chess engine in C++ supporting the UCI protocol"
+    HOMEPAGE_URL "https://github.com/HannoKruger/CrusherChess"
+    LANGUAGES CXX
+)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_VERBOSE_MAKEFILE ON)
